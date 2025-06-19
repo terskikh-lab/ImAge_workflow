@@ -1,4 +1,4 @@
-#ignore data
+#results
 Data/
 
 # Byte-compiled / optimized / DLL files
@@ -164,6 +164,3 @@ cython_debug/
 .DS_Store
 local_dependencies/.DS_Store
 local_dependencies/EpiLands/.DS_Store
-
-
-#
