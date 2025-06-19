@@ -47,7 +47,8 @@ def o2_segmentation(project='longiBLOOD',
                                        'ch4':'Channel4PrimaryAntibody'},
                            segCh='DAPI',
                            illumiCorrection=False,
-                           nWorkers=4
+                           nWorkers=4,
+                           voxelDim=[1,0.5,0.5]  # [z, y, x] in micrometers
                            ):
     #Initialization=======================
     parameterPath=f'{resultsSavePath}/platemap/{project}.csv'
@@ -115,7 +116,7 @@ def o2_segmentation(project='longiBLOOD',
         args_list.append((
             imageIndex,
             fn, cn, rn, parameters, segCh, savePath, saveNameAdd,
-            chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1,
+            chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, voxelDim
         ))
 
     # Use a regular dictionary for progress tracking
@@ -150,7 +151,8 @@ def projectindexer(name):
 def _process_combo(args):
     (imageIndex,
      fn, cn, rn, parameters, segCh, savePath, saveNameAdd, 
-     chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, progress_dict) = args
+     chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, voxelDim, 
+     progress_dict) = args
 
     key = f"field{fn}_col{cn}_row{rn}"
     if progress_dict is not None:
@@ -202,6 +204,25 @@ def _process_combo(args):
         zStackImgC = basic.transform(zStackImg)[0]
     else:
         zStackImgC = zStackImg
+        
+    #resize the image stack to match the voxel dimensions
+    '''
+    insert process
+    
+    '''
+    interpFactorZXY = [(2 / voxelDim[0]), (1 / voxelDim[1]), (1 / voxelDim[2])]
+    matZ, matY, matX = zStackImgC.shape
+    downSampleZ = np.arange(0, matZ, interpFactorZXY[0])
+    downSampleX = np.arange(0, matX, interpFactorZXY[2])
+    downSampleY = np.arange(0, matY, interpFactorZXY[1])
+    zSigma = 3  # sigma = 7 for z axis is the optimal parameter 2024.08.23
+    normImgInterp = lin3dinterp(
+        normImg,
+        downSampleZ,
+        downSampleX,
+        downSampleY,
+    )
+    
     normImg = imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
     normImg = filters.unsharp_mask(normImg, radius=5, amount=10)
     
@@ -214,19 +235,69 @@ def _process_combo(args):
     if progress_dict is not None:
         progress_dict[key] = "segmenting images... done"
 
-    cellsWBkg = np.unique(masks)
-    cellImgList = {}
-    cellLocalCoordList = {}
-    cellGlobalCoordList = {}
-    for cellIdx in range(1, len(cellsWBkg)):
-        croppedImgs = {}
-        tmpMask = (masks==cellsWBkg[cellIdx]).astype(float)
-        img, mask, localCoord, globalCoord = crop3d(ROI=tmpMask, img=zStackImgC, margin=3, returnCoord=True)
-        croppedImgs['mask'] = mask.astype(bool)
-        croppedImgs[segCh] = img.astype(dType)
-        cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = croppedImgs
-        cellLocalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = localCoord
-        cellGlobalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = globalCoord
+        cellsWBkg = np.unique(masks)
+        cellImgList = {}
+        cellLocalCoordList = {}
+        cellGlobalCoordList = {}
+        for cellIdx in range(1, len(cellsWBkg)):
+            croppedImgs = {}
+            tmpMask = (masks == cellsWBkg[cellIdx]).astype(float)
+            _, cropMask, localCoord, globalCoord = crop3d(
+                ROI=tmpMask, img=tmpMask, margin=0, returnCoord=True
+            )
+
+            cropMaxZ, cropMaxX, cropMaxY = cropMask.shape
+            upSampleZ = np.arange(0, cropMaxZ, 1 / interpFactorZXY[0])
+            upSampleX = np.arange(0, cropMaxX, 1 / interpFactorZXY[1])
+            upSampleY = np.arange(0, cropMaxY, 1 / interpFactorZXY[2])
+            # upsample the mask
+            cropMaskUpsampled = shapelin3dinterp(
+                cropMask, upSampleZ, upSampleX, upSampleY
+            )
+
+            # get upsampled bounding coordinates
+            zmin = np.floor(downSampleZ[globalCoord[0]] + 0.5).astype(int)
+            xmin = np.floor(downSampleX[globalCoord[2]] + 0.5).astype(int)
+            ymin = np.floor(downSampleY[globalCoord[4]] + 0.5).astype(int)
+
+            # update local and global coordinates
+            localCoordUpSampled = [
+                np.argmin(np.abs(upSampleZ - localCoord[0])),
+                np.argmin(np.abs(upSampleZ - (localCoord[1] - 1))),
+                np.argmin(np.abs(upSampleX - localCoord[2])),
+                np.argmin(np.abs(upSampleX - (localCoord[3] - 1))),
+                np.argmin(np.abs(upSampleY - localCoord[4])),
+                np.argmin(np.abs(upSampleY - (localCoord[5] - 1))),
+            ]
+            globalCoordUpSampled = [
+                zmin,
+                zmin + localCoordUpSampled[1] - localCoordUpSampled[0],
+                xmin,
+                xmin + localCoordUpSampled[3] - localCoordUpSampled[2],
+                ymin,
+                ymin + localCoordUpSampled[5] - localCoordUpSampled[4],
+            ]
+
+            croppedImgs["mask"] = cropMaskUpsampled[
+                localCoordUpSampled[0] : localCoordUpSampled[1],
+                localCoordUpSampled[2] : localCoordUpSampled[3],
+                localCoordUpSampled[4] : localCoordUpSampled[5],
+            ].astype(bool)
+            croppedImgs[segCh] = zStackImg[
+                globalCoordUpSampled[0] : globalCoordUpSampled[1],
+                globalCoordUpSampled[2] : globalCoordUpSampled[3],
+                globalCoordUpSampled[4] : globalCoordUpSampled[5],
+            ].astype(dType)
+            cellImgList["r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)] = (
+                croppedImgs
+            )
+            cellLocalCoordList[
+                "r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)
+            ] = localCoordUpSampled
+            cellGlobalCoordList[
+                "r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)
+            ] = globalCoordUpSampled
+            print(cellIdx)
 
     for chN in otherCh:
         imgStack = []
