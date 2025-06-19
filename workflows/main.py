@@ -1,15 +1,28 @@
 #exeP_Reprogramming.py
 
-p='OSKMtissueHeart'
+
+'''
+configuration
+'''
+p='OSKMtissueHeart' #project name, this will be used to save the results
 chs=['DAPI','H3K27me3','H3K27ac','H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
+orgDataLoadPath='../Data/Original',
+orgDataSubFolder='Images',
+imageFileRegEx='',
+imageFileFormat='.tiff',
 
 #%% ========================================================================================
 '''
-Illumination correction (optional)
-Recommended to run this step first when data consists of more than 25 wells
+Illumination correction 
+Optional. However recommended to run this step first when data consists of more than 25 wells
 '''
-from o1_illumination_correction import s2_o1_BaSiC
-s2_o1_BaSiC(project=p)
+from o1_illumination_correction import o1_illumination_correction
+o1_illumination_correction(project=p,
+                           orgDataLoadPath=orgDataLoadPath,
+                           orgDataSubFolder=orgDataSubFolder,
+                           imageFileRegEx=imageFileRegEx,
+                           imageFileFormat=imageFileFormat
+                           )
 
 
 #%% ========================================================================================

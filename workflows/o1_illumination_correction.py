@@ -1,10 +1,9 @@
 '''
-Description s2_o1_BaSiC
+Description o1_illumination_correction
 ========================================
-series 2 (s2): analysis of the 2D/3D plate images (for intestinal STEM cell and longitudinal blood samples)
-obtain the background and darkfield images to correct the intensity of the images 
+
+
 ========================================
-Kenta Ninomiya @ Sanford Burnham Prebys Medical Discovery Institute: 2022/10/31
 '''
 
 #import modules=======================
@@ -17,27 +16,27 @@ from basicpy import BaSiC
 import pandas as pd
 
 #import self defined subfunctions========
-import sys
-sys.path.append('subfunctions')
 from subfunctions.dir_rmv_folder import dir_rmv_folder
 from subfunctions.dir_rmv_file import dir_rmv_file
-from subfunctions.glaylconvert import glaylconvert
-from subfunctions.dbgimshow import dbgimshow
+from subfunctions.imreqant import imreqant
 from subfunctions.progressregister import progressregister
 from subfunctions.idxremover import idxremover
-from subfunctions.crop2d import crop2d
 from subfunctions.ezsave import ezsave
 from subfunctions.ezload import ezload
 
 #=====================================
 
-def s2_o1_BaSiC(project='longiBLOOD',
-                orgDataLoadPath='../Data/Original'):
+def o1_illumination_correction(project='longiBLOOD',
+                orgDataLoadPath='../Data/Original',
+                orgDataSubFolder='Images',
+                imageFileRegEx='',
+                imageFileFormat='.tiff',
+                ):
     # time.sleep(random.random())
     #Initialization=======================
     loadPath=orgDataLoadPath
-    savePath='../Data/Results/'+project+'/s2_o1_BaSiC'
-    
+    savePath=f'../Data/Results/{project}/o1_illumination_correction'
+
     if os.path.exists(savePath)==False:
         os.makedirs(savePath, exist_ok=True)
     #======================================
@@ -47,8 +46,8 @@ def s2_o1_BaSiC(project='longiBLOOD',
     folder=folderList[folderIndex][0]
     
     #get the field of view list
-    imgPath=loadPath+'/'+folder+'/Images'
-    imgList=np.array(dir_rmv_file(imgPath, '*.tiff'))
+    imgPath=f'{loadPath}/{folder}/{orgDataSubFolder}'
+    imgList=np.array(dir_rmv_file(imgPath, imageFileRegEx))
     
     rcfpIdx=np.array([
         [f.split('-')[0].split('r')[1].split('c')[0] for f in imgList],
@@ -62,8 +61,8 @@ def s2_o1_BaSiC(project='longiBLOOD',
         for fn in np.unique(rcfpIdx[2,:]):
             #computation checkpoint
             #Check the existence of results (if exists, calculation is skipped)=======================
-            saveFileName=savePath+'/model_ch'+ch+'_f'+fn+'.pickle'
-            idxFileName=savePath+'/.model_ch'+ch+'_f'+fn+'.pickle'
+            saveFileName=f'{savePath}/model_ch{ch}_f{fn}.pickle'
+            idxFileName=f'{savePath}/.model_ch{ch}_f{fn}.pickle'
             res=progressregister(saveFileName,idxFileName)
             if res:
                 continue
@@ -75,7 +74,7 @@ def s2_o1_BaSiC(project='longiBLOOD',
                     imgStack=list()
                     imgCount=0   
                     for pn in np.unique(rcfpIdx[3,:]):
-                        tmpFileName=imgPath+'/r'+rn+'c'+cn+'f'+fn+'p'+pn+'-ch'+str(ch)+'sk1fk1fl1.tiff'
+                        tmpFileName=f'{imgPath}/r{rn}c{cn}f{fn}p{pn}-ch{ch}sk1fk1fl1.tiff'
                         if os.path.exists(tmpFileName)==False:
                             continue
                         tmpImg=tiff.imread(tmpFileName)
