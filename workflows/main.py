@@ -1,15 +1,18 @@
 #exeP_Reprogramming.py
-
+import re
 
 '''
 configuration
 '''
-p='OSKMtissueHeart' #project name, this will be used to save the results
+p='brain_3ages_k27me3' #project name, this will be used to save the results
 chs=['DAPI','H3K27me3','H3K27ac','H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
-orgDataLoadPath='../Data/Original',
-orgDataSubFolder='Images',
-imageFileRegEx='',
-imageFileFormat='.tiff',
+# orgDataLoadPath='../Data/Original'
+orgDataLoadPath='/mnt/m/imaging_data/old_ImAge_publication'
+orgDataSubFolder='Images'
+
+# r01c11f01p01-ch1sk1fk1fl1.tiff
+imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
+imageFileFormat='.tiff'
 
 #%% ========================================================================================
 '''
@@ -20,27 +23,34 @@ from o1_illumination_correction import o1_illumination_correction
 o1_illumination_correction(project=p,
                            orgDataLoadPath=orgDataLoadPath,
                            orgDataSubFolder=orgDataSubFolder,
+                           resultsSavePath='../Data/Results',
                            imageFileRegEx=imageFileRegEx,
-                           imageFileFormat=imageFileFormat
+                           imageFileFormat=imageFileFormat,
+                           nWorkers=10
                            )
-
 
 #%% ========================================================================================
 '''
 Segmentation
 '''
-# import sys
-# try:
-#     gpuN=int(sys.argv[1])
-# except:
-#     gpuN=None
+import sys
+try:
+    gpuN=int(sys.argv[1])
+except:
+    gpuN=None
     
-# from s2_o2_BSC_segmentation import gpuinit
-# gpuinit(gpuN=gpuN)
+from subfunctions.gpuinit import gpuinit
+gpuinit(gpuN=gpuN)
 
-# from o2_segmentation import s2_o2_BSC_segmentation
-# for p in ps:
-#     s2_o2_BSC_segmentation(project=p,segCh='DAPI',illumiCorrection=True)
+from o2_segmentation import s2_o2_BSC_segmentation
+s2_o2_BSC_segmentation(project=p,
+                        segCh='DAPI',
+                        illumiCorrection=False,
+                        
+                        orgDataLoadPath=orgDataLoadPath,
+                        orgDataSubFolder=orgDataSubFolder,
+                        imageFileRegEx=imageFileRegEx,
+                        imageFileFormat=imageFileFormat,)
 
 
 # import sys
@@ -216,12 +226,12 @@ Segmentation
 # #                                                 )
             
 
-from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN
-for p in ps:
-    for meanSize in [200]:
-        fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN(projects=[p],
-                                            contents=chs,
-                                            meanSize=meanSize,)
+# from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN
+# for p in ps:
+#     for meanSize in [200]:
+#         fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN(projects=[p],
+#                                             contents=chs,
+#                                             meanSize=meanSize,)
 
 # # from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_hUMAP import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_hUMAP
 # # for p in ps:

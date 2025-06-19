@@ -20,47 +20,37 @@ from basicpy import BaSiC
 from skimage import filters
 import platform    
 
-#import self defined functions========
-from Functions.dir_rmv_folder import dir_rmv_folder
-from Functions.dir_rmv_file import dir_rmv_file
-from Functions.glaylconvert import glaylconvert
-from Functions.dbgimshow import dbgimshow
-from Functions.progressregister import progressregister
-from Functions.idxremover import idxremover
-from Functions.crop2d import crop2d
-from Functions.ezsave import ezsave
-from Functions.ezload import ezload
-from Functions.crop3d import crop3d
+#import self defined subfunctions========
+from subfunctions.extract_metadata_to_df import extract_metadata_to_df
+from subfunctions.check_zslice_consistency import check_zslice_consistency
+from subfunctions.progress_printer import progress_printer
+from subfunctions.dir_rmv_folder import dir_rmv_folder
+from subfunctions.dir_rmv_file import dir_rmv_file
+from subfunctions.imreqant import imreqant
+from subfunctions.progressregister import progressregister
+from subfunctions.idxremover import idxremover
+from subfunctions.ezsave import ezsave
+from subfunctions.ezload import ezload
+from subfunctions.crop3d import crop3d
 
 #=====================================
 time.sleep(random.random())
 
-
-def gpuinit(gpuN=None):
-    if platform.system()!='Darwin':
-        gpus = tf.config.list_physical_devices(device_type='GPU')
-        if len(gpus)==0:
-            tf.config.set_visible_devices([], 'GPU')
-        else:
-            if gpuN!=None:
-                gpuIdx=gpuN
-            else:    
-                gpuIdx=random.sample(list(range(0,len(gpus))), 1)[0]
-            tf.config.experimental.set_memory_growth(gpus[gpuIdx], True)
-            tf.config.set_visible_devices(gpus[gpuIdx], 'GPU')
-
-
 def s2_o2_BSC_segmentation(project='longiBLOOD',
+                           orgDataLoadPath=orgDataLoadPath,
+                           orgDataSubFolder=orgDataSubFolder,
+                           resultsSavePath='../Data/Results',
+                           imageFileRegEx=imageFileRegEx,
+                           imageFileFormat=imageFileFormat,
                            segCh='DAPI',
-                           chSet=['DAPI','H3K27me3','H3K27ac','H3K9ac'],
-                           illumiCorrection=True,
-                           orgDataLoadPath='../Data/Original',):
+                           illumiCorrection=False,
+                           ):
     #Initialization=======================
-    parameterPath='../Data/Results/Parameters/'+project+'.csv'
+    parameterPath=f'{resultsSavePath}/Parameters/{project}.csv'
     parameters=pd.read_csv(parameterPath, dtype=str)
     loadPath=orgDataLoadPath
-    loadPath1='../Data/Results/'+project+'/s2_o1_BaSiC_markwise'
-    savePath='../Data/Results/'+project+'/s2_o2_BSC_segmentation'
+    loadPath1=f'{resultsSavePath}/{project}/s2_o1_BaSiC_markwise'
+    savePath=f'{resultsSavePath}/{project}/s2_o2_BSC_segmentation'
     if os.path.exists(savePath)==False:
         os.makedirs(savePath, exist_ok=True)
         
@@ -78,17 +68,16 @@ def s2_o2_BSC_segmentation(project='longiBLOOD',
     folderIndex=[projectindexer(n)==project for n in folderList]    #specify the project
     folder=folderList[folderIndex][0]
     
-    #get the field of view list
-    imgPath=loadPath+'/'+folder+'/Images'
-    imgList=np.array(dir_rmv_file(imgPath, '*.tiff'))
     
-    rcfpIdx=np.array([
-        [f.split('-')[0].split('r')[1].split('c')[0] for f in imgList],
-        [f.split('-')[0].split('c')[1].split('f')[0] for f in imgList],
-        [f.split('-')[0].split('f')[1].split('p')[0] for f in imgList],
-        [f.split('-')[0].split('p')[1] for f in imgList],
-        [f.split('-')[1].split('ch')[1].split('sk')[0] for f in imgList]
-        ])
+    #get the field of view list
+    imgPath=f'{loadPath}/{folder}/{orgDataSubFolder}'
+    imgList=np.array(dir_rmv_file(imgPath, f'*{imageFileFormat}'))
+    
+    # Extract metadata for each file and build rcfpIdx as a DataFrame
+    rcfpIdx = extract_metadata_to_df(imgList, imageFileRegEx)
+
+    # Check z slice consistency
+    zposNum = check_zslice_consistency(rcfpIdx)
     
     for fn in np.unique(rcfpIdx[2,:]):    #for each field of view
         for cn in np.unique(rcfpIdx[1,:]):   #for each column
@@ -101,9 +90,6 @@ def s2_o2_BSC_segmentation(project='longiBLOOD',
                     continue
                 tmpParams=parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
                 chList=np.array([tmpParams['Channel'+str(i+1)+'PrimaryAntibody'].values[0] for i in range(4)])
-                #compare chList and chSet and skip the process if the channel set is not included in the chList
-                if np.sum([ch in chList for ch in chSet])!=len(chSet):
-                    continue
                 
                 #computation checkpoint
                 #Check the existence of results (if exists, calculation is skipped)=======================
@@ -132,11 +118,11 @@ def s2_o2_BSC_segmentation(project='longiBLOOD',
                 
                 #load the correction model
                 if illumiCorrection:
-                    basic=ezload(loadPath1+'/model_DAPI_f'+fn+'.pickle')['basic']
+                    basic=ezload(loadPath1+'/model_'+segCh+'_f'+fn+'.pickle')['basic']
                     zStackImgC=basic.transform(zStackImg)[0]
                 else:
                     zStackImgC=zStackImg
-                normImg=glaylconvert(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
+                normImg=imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
                 normImg=filters.unsharp_mask(normImg, radius=5, amount=10)
                 masks, _ = model.predict_instances(normImg, prob_thresh=0.75)
                 
@@ -148,12 +134,6 @@ def s2_o2_BSC_segmentation(project='longiBLOOD',
                     croppedImgs={}
                     tmpMask=(masks==cellsWBkg[cellIdx]).astype(float)
                     img, mask, localCoord, globalCoord=crop3d(ROI=tmpMask, img=zStackImgC, margin=3, returnCoord=True)
-                    #visulize the cropped image
-                    # import matplotlib.pyplot as plt
-                    # ax=plt.figure()
-                    # plt.imshow(tmpMask.max(axis=0))
-                    # plt.show()
-
                     croppedImgs['mask']=mask.astype(np.bool) #save the mask as bool
                     croppedImgs[segCh]=img.astype(dType)
                     cellImgList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]=croppedImgs

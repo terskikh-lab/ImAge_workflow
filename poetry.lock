@@ -557,6 +557,43 @@ files = [
 ]
 
 [[package]]
+name = "imagecodecs"
+version = "2023.7.10"
+description = "Image transformation, compression, and decompression codecs"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "imagecodecs-2023.7.10-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:26155fd27b1958e58a7e938f26c624fc77b28f87a97cd873683470a48333ccd3"},
+    {file = "imagecodecs-2023.7.10-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1cd1341f754069c6d8021f61d0d326422c6d66342366724b577cc3f43c1350b2"},
+    {file = "imagecodecs-2023.7.10-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:eb36effc15dcb93de90a2a76e6cbd0e98ac226c6e8cdbc22335a9d3de99898d3"},
+    {file = "imagecodecs-2023.7.10-cp310-cp310-win32.whl", hash = "sha256:0193284fff6ee9a19846ddb3e9270bbc14035bc25a10bde2ee13514ed0b77c19"},
+    {file = "imagecodecs-2023.7.10-cp310-cp310-win_amd64.whl", hash = "sha256:c62fc99158d9d1d214ccb412e2638b570ee1eb4c2dbaf229e40c1e93890617ba"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:f3296069dc5a981e522bcede0fe6d50da3746b392037cc1b973760208a5365ea"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:5dd877e2aff6fbb000350fc2a76c7c0fc356f8a8756bc594a0f044db5715c8d7"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b18ee8391c2542974f6ca0e7d166ada227d2133ff555c91bb566e74028c1ed0f"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-win32.whl", hash = "sha256:f3f06471288879506de3b4df2538db2ca8fbe10bf14a6ba37d2e6ac1d0b290c3"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-win_amd64.whl", hash = "sha256:c0a1fcbf1025b9e7bc4a3704b9c633840cd957ed543813e57fa429bc91a81015"},
+    {file = "imagecodecs-2023.7.10-cp311-cp311-win_arm64.whl", hash = "sha256:893699741f1e2324410b5247619906d9f50e209e653405da7d7bc5fc83e783b8"},
+    {file = "imagecodecs-2023.7.10-cp312-cp312-win32.whl", hash = "sha256:557a42ee7e600ef4c7cd35c1f84fd7bfb88548769a58ee067c465d05132bdf3d"},
+    {file = "imagecodecs-2023.7.10-cp312-cp312-win_amd64.whl", hash = "sha256:769d187cbfddd5deac95668715b0c49c402581bd58c846fa82435e1a83533734"},
+    {file = "imagecodecs-2023.7.10-cp312-cp312-win_arm64.whl", hash = "sha256:4b3d043e84340e367fe97c997c19c31b1f98ab158dc1e08f3f810b5db8f3e60c"},
+    {file = "imagecodecs-2023.7.10-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a750c3dc744e81d287381b49cf1504087bd6525293f43b9328c677e4ef9ecc31"},
+    {file = "imagecodecs-2023.7.10-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:978f39bb1a4fbe4cee6742cda9c77341a87329857daf588c2e166c4bdee06ff0"},
+    {file = "imagecodecs-2023.7.10-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6cd70067bb8b99b5c389b53ce1802b6f32919a9357e6d10e739f7b750a7f69d3"},
+    {file = "imagecodecs-2023.7.10-cp39-cp39-win32.whl", hash = "sha256:f37abe49bc548608a11d9078876532b1dccd7564d2d3076c14a0b27b237d8ef3"},
+    {file = "imagecodecs-2023.7.10-cp39-cp39-win_amd64.whl", hash = "sha256:3edb834de6f38556741322f4b3d47d579c4ee2a480f8084fb9d622d13e25eb63"},
+    {file = "imagecodecs-2023.7.10-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:bbc49d0866684cd1df77c981ce742c5cdd15d3fb79bb04fae79d737bdb55ac5e"},
+    {file = "imagecodecs-2023.7.10.tar.gz", hash = "sha256:cce1b815e55c4cda67582b87fbf4e2b3caa2dd447b1cdb33fa4f8ccafea8064a"},
+]
+
+[package.dependencies]
+numpy = "*"
+
+[package.extras]
+all = ["matplotlib", "numcodecs", "tifffile"]
+
+[[package]]
 name = "imageio"
 version = "2.34.1"
 description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats."
@@ -2601,4 +2638,4 @@ test = ["big-O", "importlib-resources ; python_version < \"3.9\"", "jaraco.funct
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<3.12"
-content-hash = "6416e4973e7a34ded2d8a1a03af538fd2fd7f83c1452f3b239623cdc0aad73e5"
+content-hash = "192d63355e9b2d0515429423954b0cfd6a89fe32efc54e1d4d0cdc61ec19be84"
