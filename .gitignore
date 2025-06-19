@@ -1,3 +1,6 @@
+#results
+Data/
+
 # Byte-compiled / optimized / DLL files
 *__pycache__/
 *.py[cod]
@@ -161,6 +164,3 @@ cython_debug/
 .DS_Store
 local_dependencies/.DS_Store
 local_dependencies/EpiLands/.DS_Store
-
-
-#
