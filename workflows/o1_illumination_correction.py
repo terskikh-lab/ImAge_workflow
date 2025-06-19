@@ -75,12 +75,15 @@ def o1_illumination_correction(project='longiBLOOD',
         ch, fn = args[0], args[1]
         progress_dict[f"channel{ch}_field{fn}"] = "pending"
 
-    # Start progress printer in a separate process
-    printer_proc = multiprocessing.Process(target=progress_printer, args=(progress_dict, 'o1_illumination_correction', len(args_list)))
+    # Use imported progress_printer
+    printer_proc = multiprocessing.Process(
+        target=progress_printer,
+        args=(progress_dict, 'o1_illumination_correction', len(args_list))
+    )
     printer_proc.start()
 
-    # Run processing in parallel
-    with concurrent.futures.ProcessPoolExecutor(max_workers=nWorkers) as executor:
+    # Run processing in parallel using threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
         futures = [
             executor.submit(_process_ch_fn_combo, args + (progress_dict,))
             for args in args_list

@@ -1,10 +1,7 @@
 '''
-Description s2_o2_BSC_segmentation.py
+Description o2_segmentation.py
 ========================================
-series 2 (s2): analysis of the 2D/3D plate images (for intestinal STEM cell and longitudinal blood samples)
-apply the BaSiC Correction to the images and segment the cells using Stardist 3D
 ========================================
-Kenta Ninomiya @ Sanford Burnham Prebys Medical Discovery Institute: 2022/10/31
 '''
 
 #import modules=======================
@@ -19,6 +16,8 @@ import tensorflow as tf
 from basicpy import BaSiC
 from skimage import filters
 import platform    
+import concurrent.futures
+import threading
 
 #import self defined subfunctions========
 from subfunctions.extract_metadata_to_df import extract_metadata_to_df
@@ -36,26 +35,45 @@ from subfunctions.crop3d import crop3d
 #=====================================
 time.sleep(random.random())
 
-def s2_o2_BSC_segmentation(project='longiBLOOD',
-                           orgDataLoadPath=orgDataLoadPath,
-                           orgDataSubFolder=orgDataSubFolder,
+def o2_segmentation(project='longiBLOOD',
+                           orgDataLoadPath='../Data/Original',
+                           orgDataSubFolder='Images',
                            resultsSavePath='../Data/Results',
-                           imageFileRegEx=imageFileRegEx,
-                           imageFileFormat=imageFileFormat,
+                           imageFileRegEx='',
+                           imageFileFormat='.tiff',
+                           imageIndex={'ch1':'Channel1PrimaryAntibody',
+                                       'ch2':'Channel2PrimaryAntibody',
+                                       'ch3':'Channel3PrimaryAntibody',
+                                       'ch4':'Channel4PrimaryAntibody'},
                            segCh='DAPI',
                            illumiCorrection=False,
+                           nWorkers=4
                            ):
     #Initialization=======================
-    parameterPath=f'{resultsSavePath}/Parameters/{project}.csv'
+    parameterPath=f'{resultsSavePath}/platemap/{project}.csv'
     parameters=pd.read_csv(parameterPath, dtype=str)
     loadPath=orgDataLoadPath
-    loadPath1=f'{resultsSavePath}/{project}/s2_o1_BaSiC_markwise'
-    savePath=f'{resultsSavePath}/{project}/s2_o2_BSC_segmentation'
+    loadPath1=f'{resultsSavePath}/{project}/o1_illumination_correction'
+    savePath=f'{resultsSavePath}/{project}/o2_segmentation'
     if os.path.exists(savePath)==False:
         os.makedirs(savePath, exist_ok=True)
         
     model = StarDist3D.from_pretrained('3D_demo')
-    
+    # Get the size of the loaded model in GB (disk)
+    import pathlib
+    def get_dir_size_gb(path):
+        total = 0
+        for p in pathlib.Path(path).rglob('*'):
+            if p.is_file():
+                total += p.stat().st_size
+        return total / (1024**3)
+    model_dir = model.config['model_dir'] if 'model_dir' in model.config else getattr(model, 'model_dir', None)
+    if model_dir:
+        model_size_gb = get_dir_size_gb(model_dir)
+        print(f"Loaded StarDist3D model size on disk: {model_size_gb:.3f} GB")
+    else:
+        print("Could not determine model directory for size calculation.")
+
     saveNameAdd=''
     if segCh!='DAPI':
         saveNameAdd='seg_'+segCh
@@ -79,103 +97,171 @@ def s2_o2_BSC_segmentation(project='longiBLOOD',
     # Check z slice consistency
     zposNum = check_zslice_consistency(rcfpIdx)
     
-    for fn in np.unique(rcfpIdx[2,:]):    #for each field of view
-        for cn in np.unique(rcfpIdx[1,:]):   #for each column
-            for rn in np.unique(rcfpIdx[0,:]):  #for each row
-                #check if the file exists for the specific column, row, field, and channel
-                #if the values of ExperimentalCondition are 0, skip the process
-                if parameters.loc[(parameters['Row'].astype(int)==int(rn)) &
-                                  (parameters['Column'].astype(int)==int(cn)),
-                                  'ExperimentalCondition'].values[0]=='0':
-                    continue
-                tmpParams=parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
-                chList=np.array([tmpParams['Channel'+str(i+1)+'PrimaryAntibody'].values[0] for i in range(4)])
-                
-                #computation checkpoint
-                #Check the existence of results (if exists, calculation is skipped)=======================
-                saveFileName=savePath+'/'+saveNameAdd+'imgs_c'+cn+'_r'+rn+'_f'+fn+'.pickle'
-                idxFileName=savePath+'/.'+saveNameAdd+'imgs_c'+cn+'_r'+rn+'_f'+fn+'.pickle'
-                res=progressregister(saveFileName,idxFileName)
-                if res:
-                    continue
-                #==========================================================================================    
-                
-                #get the channel 
-                DAPICh=np.where(chList==segCh)[0][0]
-                otherCh=np.where(np.logical_and(chList!=segCh,chList!='0'))[0]
-                
-                #get correction field
-                imgStack=list()
-                for pn in np.unique(rcfpIdx[3,:]):
-                    tmpFileName=imgPath+'/r'+rn+'c'+cn+'f'+fn+'p'+pn+'-ch'+str(DAPICh+1)+'sk1fk1fl1.tiff'
-                    tmpImg=tiff.imread(tmpFileName)
-                    imgStack.append(tmpImg)
-                    
-                #apply the correction
-                #get stacked numpy array form imgStack
-                zStackImg=np.stack(imgStack,axis=0)
-                dType=zStackImg.dtype
-                
-                #load the correction model
-                if illumiCorrection:
-                    basic=ezload(loadPath1+'/model_'+segCh+'_f'+fn+'.pickle')['basic']
-                    zStackImgC=basic.transform(zStackImg)[0]
-                else:
-                    zStackImgC=zStackImg
-                normImg=imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
-                normImg=filters.unsharp_mask(normImg, radius=5, amount=10)
-                masks, _ = model.predict_instances(normImg, prob_thresh=0.75)
-                
-                cellsWBkg=np.unique(masks)
-                cellImgList={}
-                cellLocalCoordList={}
-                cellGlobalCoordList={}
-                for cellIdx in range(1,len(cellsWBkg)):
-                    croppedImgs={}
-                    tmpMask=(masks==cellsWBkg[cellIdx]).astype(float)
-                    img, mask, localCoord, globalCoord=crop3d(ROI=tmpMask, img=zStackImgC, margin=3, returnCoord=True)
-                    croppedImgs['mask']=mask.astype(np.bool) #save the mask as bool
-                    croppedImgs[segCh]=img.astype(dType)
-                    cellImgList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]=croppedImgs
-                    cellLocalCoordList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]=localCoord
-                    cellGlobalCoordList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]=globalCoord
-                    
-                for chN in otherCh:
-                    #load images and get correction field
-                    imgStack=list()
-                    for pn in np.unique(rcfpIdx[3,:]):
-                        tmpFileName=imgPath+'/r'+rn+'c'+cn+'f'+fn+'p'+pn+'-ch'+str(chN+1)+'sk1fk1fl1.tiff'
-                        tmpImg=tiff.imread(tmpFileName)
-                        imgStack.append(tmpImg)
-                    
-                    #apply the correction
-                    #get stacked numpy array form imgStack
-                    zStackImg=np.stack(imgStack,axis=0)
-                    #load the correction model
-                    if illumiCorrection:
-                        basic=ezload(loadPath1+'/model_'+chList[chN]+'_f'+fn+'.pickle')['basic']
-                        zStackImgC=basic.transform(zStackImg)[0]
-                    else:
-                        zStackImgC=zStackImg
-                    
-                    for cellIdx in range(1,len(cellsWBkg)):
-                        croppedImgs=cellImgList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]
-                        tmpMask=(masks==cellsWBkg[cellIdx]).astype(float)
-                        img, _=crop3d(ROI=tmpMask, img=zStackImgC, margin=3) #crop the cell
-                        croppedImgs[chList[chN]]=img.astype(dType)
-                        cellImgList['r'+rn+'c'+cn+'f'+fn+'_cell'+str(cellIdx)]=croppedImgs
-                
-                ezsave({'cellImgList':cellImgList,
-                        'cellLocalCoordList':cellLocalCoordList,
-                        'cellGlobalCoordList':cellGlobalCoordList,
-                        'dummy':[]},
-                       saveFileName)
-                idxremover(idxFileName)
-                        
-            
-                
+    # Use DataFrame and drop_duplicates to get unique combinations of field, col, row
+    combos = pd.DataFrame({
+        'field': rcfpIdx['field'],
+        'col': rcfpIdx['col'],
+        'raw': rcfpIdx['raw']
+    }).drop_duplicates()
+
+    # Prepare arguments for parallel processing
+    args_list = []
+    for _, combo in combos.iterrows():
+        fn = combo['field']
+        cn = combo['col']
+        rn = combo['raw']
+        tmpParams = parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
+        chList = np.array([tmpParams[i].values[0] for i in imageIndex.values()])
+        args_list.append((
+            imageIndex,
+            fn, cn, rn, parameters, segCh, savePath, saveNameAdd,
+            chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1,
+        ))
+
+    # Use a regular dictionary for progress tracking
+    progress_dict = {}
+    for i, args in enumerate(args_list):
+        fn, cn, rn = args[1], args[2], args[3]
+        key = f"field{fn}_col{cn}_row{rn}"
+        progress_dict[key] = "pending"
+        args_list[i] = args + (progress_dict,)
+        
+    # Start progress printer in a separate thread
+    printer_thread = threading.Thread(
+        target=progress_printer,
+        args=(progress_dict, 'o2_segmentation', len(args_list))
+    )
+    printer_thread.start()
+
+    # Run processing in parallel using ThreadPoolExecutor
+    with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
+        list(executor.map(_process_combo, args_list))
+
+    printer_thread.join()
+
+
 def projectindexer(name):
     try:
         return(name.split('[')[1].split(']')[0])
     except:
-        return()   
+        return()
+    
+
+def _process_combo(args):
+    (imageIndex,
+     fn, cn, rn, parameters, segCh, savePath, saveNameAdd, 
+     chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, progress_dict) = args
+
+    key = f"field{fn}_col{cn}_row{rn}"
+    if progress_dict is not None:
+        progress_dict[key] = f"processing"
+
+    tmpParams = parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
+    chList = np.array([tmpParams[i].values[0] for i in imageIndex.values()])
+
+    #progess register=========================
+    saveFileName = f'{savePath}/{saveNameAdd}imgs_c{cn}_r{rn}_f{fn}.pickle'
+    idxFileName = f'{savePath}/.{saveNameAdd}imgs_c{cn}_r{rn}_f{fn}.pickle'
+    res=progressregister(saveFileName,idxFileName,returnFileType=True, produceidx=True, recheck=True)
+    if res!=0:
+        if progress_dict is not None:
+            status=["file exists", "inprogress file exists"][res-1]
+            progress_dict[key] = f"skipped because {status}"
+        return
+    #=========================================
+
+    segChIdx = np.where(chList==segCh)[0][0]
+    otherCh = np.where(np.logical_and(chList!=segCh, chList!='0'))[0]
+    imgStack = []
+    imgCount = 0
+    for pn in rcfpIdx['zposition'].unique():
+        fileIdx=rcfpIdx[(rcfpIdx['channel'] == segChIdx+1) &
+                        (rcfpIdx['field'] == fn) &
+                        (rcfpIdx['col'] == cn) &
+                        (rcfpIdx['raw'] == rn) &
+                        (rcfpIdx['zposition'] == pn)]
+        if fileIdx.empty:
+            continue
+        filename = fileIdx['filename'].values[0]
+        tmpFileName=f'{imgPath}/{filename}'
+        tmpImg=tiff.imread(tmpFileName)
+        imgStack.append(tmpImg)
+        imgCount+=1
+        progress_dict[key] = f"processing: loading images... {imgCount} images loaded for channel {segCh}, field {fn}, col {cn}, row {rn}"
+
+    if len(imgStack) == 0:
+        if progress_dict is not None:
+            progress_dict[key] = "skipped (no images found)"
+        return
+    
+    zStackImg = np.stack(imgStack, axis=0)
+    dType = zStackImg.dtype
+
+    if illumiCorrection:
+        basic = ezload(f'{loadPath1}/model_{segCh}_f{fn}.pickle')['basic']
+        zStackImgC = basic.transform(zStackImg)[0]
+    else:
+        zStackImgC = zStackImg
+    normImg = imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
+    normImg = filters.unsharp_mask(normImg, radius=5, amount=10)
+    
+    # Segment the images using Stardist
+    if progress_dict is not None:
+        progress_dict[key] = "segmenting images..."
+        
+    masks, _ = model.predict_instances(normImg, prob_thresh=0.75, )
+    
+    if progress_dict is not None:
+        progress_dict[key] = "segmenting images... done"
+
+    cellsWBkg = np.unique(masks)
+    cellImgList = {}
+    cellLocalCoordList = {}
+    cellGlobalCoordList = {}
+    for cellIdx in range(1, len(cellsWBkg)):
+        croppedImgs = {}
+        tmpMask = (masks==cellsWBkg[cellIdx]).astype(float)
+        img, mask, localCoord, globalCoord = crop3d(ROI=tmpMask, img=zStackImgC, margin=3, returnCoord=True)
+        croppedImgs['mask'] = mask.astype(bool)
+        croppedImgs[segCh] = img.astype(dType)
+        cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = croppedImgs
+        cellLocalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = localCoord
+        cellGlobalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = globalCoord
+
+    for chN in otherCh:
+        imgStack = []
+        for pn in np.unique(rcfpIdx['zposition']):
+            fileIdx = rcfpIdx[(rcfpIdx['channel'] == chList[chN]) &
+                              (rcfpIdx['field'] == fn) &
+                              (rcfpIdx['col'] == cn) &
+                              (rcfpIdx['raw'] == rn) &
+                              (rcfpIdx['zposition'] == pn)]
+            if fileIdx.empty:
+                continue
+            filename = fileIdx['filename'].values[0]
+            tmpFileName = f'{imgPath}/{filename}'
+            tmpImg = tiff.imread(tmpFileName)
+            imgStack.append(tmpImg)
+            if progress_dict is not None:
+                progress_dict[key] = f"loading channel {chList[chN]} images... {len(imgStack)}/{len(np.unique(rcfpIdx['zposition']))}"
+
+        zStackImg = np.stack(imgStack, axis=0)
+        if illumiCorrection:
+            basic = ezload(f'{loadPath1}/model_{chList[chN]}_f{fn}.pickle')['basic']
+            zStackImgC = basic.transform(zStackImg)[0]
+        else:
+            zStackImgC = zStackImg
+
+        for cellIdx in range(1, len(cellsWBkg)):
+            croppedImgs = cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}']
+            tmpMask = (masks==cellsWBkg[cellIdx]).astype(float)
+            img, _ = crop3d(ROI=tmpMask, img=zStackImgC, margin=3)
+            croppedImgs[chList[chN]] = img.astype(dType)
+            cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = croppedImgs
+
+    ezsave({'cellImgList':cellImgList,
+            'cellLocalCoordList':cellLocalCoordList,
+            'cellGlobalCoordList':cellGlobalCoordList,
+            'dummy':[]},
+           saveFileName)
+    idxremover(idxFileName)

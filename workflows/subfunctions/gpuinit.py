@@ -1,7 +1,11 @@
 
 import tensorflow as tf
 import random
+import platform
 def gpuinit(gpuN=None):
+    if gpuN is False:
+        tf.config.set_visible_devices([], 'GPU')
+        return
     if platform.system()!='Darwin':
         gpus = tf.config.list_physical_devices(device_type='GPU')
         if len(gpus)==0:

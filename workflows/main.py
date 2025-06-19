@@ -5,29 +5,35 @@ import re
 configuration
 '''
 p='brain_3ages_k27me3' #project name, this will be used to save the results
-chs=['DAPI','H3K27me3','H3K27ac','H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
+chs=['DAPI',
+     'H3K27me3',
+     'H3K27ac',
+     'H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
+imageIndex={'ch1':'Channel1PrimaryAntibody',
+            'ch2':'Channel2PrimaryAntibody',
+            'ch3':'Channel3PrimaryAntibody'}
 # orgDataLoadPath='../Data/Original'
 orgDataLoadPath='/mnt/m/imaging_data/old_ImAge_publication'
 orgDataSubFolder='Images'
-
+resultsSavePath='Data/Results'
 # r01c11f01p01-ch1sk1fk1fl1.tiff
 imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
 #%% ========================================================================================
-'''
-Illumination correction 
-Optional. However recommended to run this step first when data consists of more than 25 wells
-'''
-from o1_illumination_correction import o1_illumination_correction
-o1_illumination_correction(project=p,
-                           orgDataLoadPath=orgDataLoadPath,
-                           orgDataSubFolder=orgDataSubFolder,
-                           resultsSavePath='../Data/Results',
-                           imageFileRegEx=imageFileRegEx,
-                           imageFileFormat=imageFileFormat,
-                           nWorkers=10
-                           )
+# '''
+# Illumination correction 
+# Optional. However recommended to run this step first when data consists of more than 25 wells
+# '''
+# from o1_illumination_correction import o1_illumination_correction
+# o1_illumination_correction(project=p,
+#                            orgDataLoadPath=orgDataLoadPath,
+#                            orgDataSubFolder=orgDataSubFolder,
+#                            resultsSavePath='Data/Results',
+#                            imageFileRegEx=imageFileRegEx,
+#                            imageFileFormat=imageFileFormat,
+#                            nWorkers=10
+#                            )
 
 #%% ========================================================================================
 '''
@@ -42,16 +48,18 @@ except:
 from subfunctions.gpuinit import gpuinit
 gpuinit(gpuN=gpuN)
 
-from o2_segmentation import s2_o2_BSC_segmentation
-s2_o2_BSC_segmentation(project=p,
-                        segCh='DAPI',
-                        illumiCorrection=False,
-                        
-                        orgDataLoadPath=orgDataLoadPath,
-                        orgDataSubFolder=orgDataSubFolder,
-                        imageFileRegEx=imageFileRegEx,
-                        imageFileFormat=imageFileFormat,)
-
+from o2_segmentation import o2_segmentation
+o2_segmentation(project=p,
+                orgDataLoadPath=orgDataLoadPath,
+                orgDataSubFolder=orgDataSubFolder,
+                resultsSavePath=resultsSavePath,
+                           imageFileRegEx=imageFileRegEx,
+                           imageFileFormat=imageFileFormat,
+                           imageIndex=imageIndex,
+                           segCh='DAPI',
+                           illumiCorrection=False,
+                           nWorkers=1,
+                           )
 
 # import sys
 # try:
