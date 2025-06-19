@@ -1,15 +1,21 @@
 #exeP_Reprogramming.py
 
-ps=[
-    'OSKMtissueHeart',
-    'OSKMtissueMuscle',
-    'OSKMtissueLiver',
-    ]
-chs=['DAPI','H3K27me3','H3K27ac','H3K9ac']
-# from s2_o1_BaSiC import s2_o1_BaSiC
-# for p in ps:
-#     s2_o1_BaSiC(project=p)
+p='OSKMtissueHeart'
+chs=['DAPI','H3K27me3','H3K27ac','H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
 
+#%% ========================================================================================
+'''
+Illumination correction (optional)
+Recommended to run this step first when data consists of more than 25 wells
+'''
+from o1_illumination_correction import s2_o1_BaSiC
+s2_o1_BaSiC(project=p)
+
+
+#%% ========================================================================================
+'''
+Segmentation
+'''
 # import sys
 # try:
 #     gpuN=int(sys.argv[1])
@@ -19,7 +25,7 @@ chs=['DAPI','H3K27me3','H3K27ac','H3K9ac']
 # from s2_o2_BSC_segmentation import gpuinit
 # gpuinit(gpuN=gpuN)
 
-# from s2_o2_BSC_segmentation import s2_o2_BSC_segmentation
+# from o2_segmentation import s2_o2_BSC_segmentation
 # for p in ps:
 #     s2_o2_BSC_segmentation(project=p,segCh='DAPI',illumiCorrection=True)
 

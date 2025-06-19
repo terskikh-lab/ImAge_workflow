@@ -16,18 +16,18 @@ import numpy as np
 from basicpy import BaSiC
 import pandas as pd
 
-#import self defined functions========
+#import self defined subfunctions========
 import sys
-sys.path.append('Functions')
-from Functions.dir_rmv_folder import dir_rmv_folder
-from Functions.dir_rmv_file import dir_rmv_file
-from Functions.glaylconvert import glaylconvert
-from Functions.dbgimshow import dbgimshow
-from Functions.progressregister import progressregister
-from Functions.idxremover import idxremover
-from Functions.crop2d import crop2d
-from Functions.ezsave import ezsave
-from Functions.ezload import ezload
+sys.path.append('subfunctions')
+from subfunctions.dir_rmv_folder import dir_rmv_folder
+from subfunctions.dir_rmv_file import dir_rmv_file
+from subfunctions.glaylconvert import glaylconvert
+from subfunctions.dbgimshow import dbgimshow
+from subfunctions.progressregister import progressregister
+from subfunctions.idxremover import idxremover
+from subfunctions.crop2d import crop2d
+from subfunctions.ezsave import ezsave
+from subfunctions.ezload import ezload
 
 #=====================================
 
