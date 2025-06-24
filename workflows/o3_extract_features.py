@@ -18,28 +18,18 @@ from scipy import ndimage
 
 
 #import self defined functions========
-from Functions.dir_rmv_folder import dir_rmv_folder
-from Functions.dir_rmv_file import dir_rmv_file
-from Functions.glaylconvert import glaylconvert
-from Functions.dbgimshow import dbgimshow
-from Functions.progressregister import progressregister
-from Functions.idxremover import idxremover
-from Functions.crop2d import crop2d
-from Functions.ezsave import ezsave
-from Functions.ezload import ezload
-from Functions.crop3d import crop3d
-from Functions.CODE_tensor import *
-from Functions.imreqant import imreqant
-from Functions.interp3d import lin3dinterp, shapelin3dinterp
-from Functions.ELTA_functions import extract_MIELv023_tas_features
+from subfunctions.dir_rmv_folder import dir_rmv_folder
+from subfunctions.dir_rmv_file import dir_rmv_file
+from subfunctions.progressregister import progressregister
+from subfunctions.idxremover import idxremover
+from subfunctions.ezsave import ezsave
+from subfunctions.ezload import ezload
+from subfunctions.interp3d import lin3dinterp, shapelin3dinterp
+from subfunctions.ELTA_functions import extract_MIELv023_tas_features
 #=====================================
 
 def s2_o4_3Dinterp_exfeatures(project='longiBLOOD',
-                              minTile=0.5,
-                              maxTile=99.5,
-                              sizeTh=0,
-                              binS=5,
-                              statPara='prob',
+                              statPara='TAS',
                               contents=[
                                         'DAPI',
                                         'H3K4me1',
@@ -82,25 +72,17 @@ def s2_o4_3Dinterp_exfeatures(project='longiBLOOD',
     contents.sort()
     #======================================
     
-    #load the mmtile percentile
-    if 'TAS' not in statPara and 'SC' not in statPara:
-        mmTiles=ezload(loadPath1+'/'+saveNameAdd+'min'+str(minTile)+'_max'+str(maxTile)+'_sizeTh'+str(sizeTh)+'.pickle')['mmTiles']
-    
     #get the field of view list
     imgList=dir_rmv_file(loadPath, saveNameAdd+'imgs*.pickle')
     
     for tmpImg in random.sample(imgList, len(imgList)):
         # Check the existence of results (if exists, calculation is skipped)=======================
-        saveFileName=savePath+'/'+statPara+'_'+'_'.join(contents)+'_'+tmpImg.split('.pickle')[0]+'_binS'+str(binS)+'.pickle'
-        idxFileName=savePath+'/.'+statPara+'_'+'_'.join(contents)+'_'+tmpImg.split('.pickle')[0]+'_binS'+str(binS)+'.pickle'
-        res=progressregister(saveFileName,idxFileName,recheck=False)
-        if res:
-            continue
-        # ==========================================================================================
-        # tmpP='habitatvar_DAPI_H3K27ac_H3K27me3_H3K9ac_imgs_c12_r10_f05_binS5.pickle'
-        # tmpImg='imgs_c12_r10_f05.pickle'
-        # if 'c13_r10_f04' not in tmpImg:
+        saveFileName=savePath+'/'+statPara+'_'+'_'.join(contents)+'_'+tmpImg.split('.pickle')[0]+'.pickle'
+        idxFileName=savePath+'/.'+statPara+'_'+'_'.join(contents)+'_'+tmpImg.split('.pickle')[0]+'.pickle'
+        # res=progressregister(saveFileName,idxFileName,recheck=False)
+        # if res:
         #     continue
+        # ==========================================================================================
         imgPath=loadPath+'/'+tmpImg
         img=ezload(imgPath)['cellImgList']
         cellList=list(img.keys())
@@ -118,7 +100,6 @@ def s2_o4_3Dinterp_exfeatures(project='longiBLOOD',
         
         cellFeats=[]
         for tmpCell in cellList:
-            # tmpCell='r10c12f05_cell21'
             cell=img[tmpCell]
             mask=cell['mask']
             if mask.sum()==0: #empty mask
@@ -137,43 +118,12 @@ def s2_o4_3Dinterp_exfeatures(project='longiBLOOD',
                 objImgs=[cell[i] for i in contents]
             
             print(tmpCell)
-            if 'TAS' not in statPara and 'SC' not in statPara:
-                cellImgReq=np.stack([(imreqant(objImgs[i], mmTiles[i][0], mmTiles[i][1], 
-                                               0, binS-1,
-                                               outLow=False, outHigh=False, getInt=True)).astype(int)
-                                    for i in range(len(contents))],axis=-1)
-                tmpFeat=statnormalizer(getstattensnd(cellImgReq,mask,binS,statPara),statPara)
-                #create the index
-                flatteningidx=np.where(np.ones(tmpFeat.shape, dtype=bool))
-                stackChannels=np.stack(flatteningidx).astype('str')
-                channels=[statPara+'_'+'_'.join(stackChannels[:,i]) for i in range(0,stackChannels.shape[1])]
-                cellFeats.append(pd.DataFrame({tmpCell:tmpFeat[flatteningidx]}, index=channels).transpose())
-            if 'SC' in statPara:
-                cellImgReq=np.stack([(imreqant(objImgs[i], mmTiles[i][0], mmTiles[i][1], 
-                                               0, binS-1,
-                                               outLow=False, outHigh=False, getInt=True)).astype(int)
-                                    for i in range(len(contents))],axis=-1)
-                baseStat=statPara.replace('SC','')
-                tmpFeat=statnormalizer(getstattensnd(cellImgReq,mask,binS,baseStat),baseStat)
-                #create the index
-                flatteningidx=np.where(np.ones(tmpFeat.shape, dtype=bool))
-                stackChannels=np.stack(flatteningidx).astype('str')
-                channels=[statPara+'_'+'_'.join(stackChannels[:,i]) for i in range(0,stackChannels.shape[1])]
-                cellFeats.append(pd.DataFrame({tmpCell:tmpFeat[flatteningidx]}, index=channels).transpose())
-            elif statPara=='TAS':
-                #compute TAS feature for each channel  
-                tmpFeat=ELTAS(dict(zip(contents, objImgs)),
-                              mask, 
-                              contents)
-                cellFeats.append(pd.DataFrame({tmpCell:tmpFeat}).transpose())
-                
-            elif statPara=='2DTAS':
-                #compute TAS feature for each channel  
-                #get maximum projection
-                tmpFeat=ELTAS(dict(zip(contents, objImgs)),
-                              mask.max(axis=0), 
-                              contents)
-                cellFeats.append(pd.DataFrame({tmpCell:tmpFeat}).transpose())
+            
+            #compute TAS feature for each channel  
+            tmpFeat=ELTAS(dict(zip(contents, objImgs)),
+                            mask, 
+                            contents)
+            cellFeats.append(pd.DataFrame({tmpCell:tmpFeat}).transpose())
             
         if len(cellFeats)!=0:
             cellFeats=pd.concat(cellFeats)
@@ -191,7 +141,6 @@ def ELTAS(tmpFile,mask,keyList):
         seg_object_img = np.where(mask == 1, tmpImg, 0)
         # average intensity of object (ie, pixels inside the mask)
         object_avg_int = np.mean(tmpImg[np.where(mask==1)])
-        
         allFeats.append(extract_MIELv023_tas_features(seg_object_img, 
                                                       key, 
                                                       object_avg_int))

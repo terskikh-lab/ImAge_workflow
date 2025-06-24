@@ -58,102 +58,22 @@ o2_segmentation(project=p,
                            imageIndex=imageIndex,
                            segCh='DAPI',
                            illumiCorrection=False,
-                           nWorkers=1,
+                           nWorkers=3,
+                           voxelDim=[1,0.6,0.6],
                            )
 
-# import sys
-# try:
-#     gpuN=int(sys.argv[1])
-# except:
-#     gpuN=None
-    
-# from s2_o2_BSC_p3Dsegmentation import gpuinit
-# gpuinit(gpuN=gpuN)
-# from s2_o2_BSC_p3Dsegmentation import s2_o2_BSC_p3Dsegmentation
-# for p in ps:
-#     s2_o2_BSC_p3Dsegmentation(project=p,segCh='DAPI',illumiCorrection=True)
-    
-
-# from fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE import fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE
-# for p in ps:
-#     fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE(project=p,segCh='DAPI',illumiCorrection=True)
-
-# from fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_LABEL import fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_LABEL
-# for p in ps:
-#     fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_LABEL(project=p,segCh='DAPI',
-#                                                        illumiCorrection=True,
-#                                                        orgDataLoadPath='../Data/Original/OSKMtissueLiver/Images',)
-# from fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_NUMCELL import fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_NUMCELL
-# for p in ps:
-#     fig_s2_o2_BSC_segmentation_MOVIEWHOLECOMPARE_NUMCELL(project=p,segCh='DAPI',
-#                                                         illumiCorrection=True,
-#                                                         conditions=['ExperimentalCondition','Passage'],
-#                                                         orgDataLoadPath='../Data/Original/OSKMtissueLiver/Images',)
-
-
-# from s2_o3_BSC_segmentation_SCOUTVIEW import s2_o3_BSC_segmentation_SCOUTVIEW
-# for p in ps:
-#     s2_o3_BSC_segmentation_SCOUTVIEW(project=p,segCh='DAPI',illumiCorrection=True)
-
-# from s2_o3_ptile import s2_o3_ptile
-# for p in ps:
-#     s2_o3_ptile(project=p,minTile=1, maxTile=99,sizeTh=0,segCh='DAPI',illumiCorrection=True)
-
-# from s2_o4_3Dinterp_exfeatures import s2_o4_3Dinterp_exfeatures
-# from s2_o4_3Dinterp_exfeatures_pyrads import s2_o4_3Dinterp_exfeatures_pyrads
-# import time, random
-# time.sleep(random.random())
-# for p in ps:
-#     for statPara in [
-#                         'prob',
-#                         'periphmean',
-#                         'periphvar',
-#                         'autoproxmean',
-#                         'autoproxvar',
-#                         'habitatmean',
-#                         'habitatvar',
-#                     ]:
-#         s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-#                                 statPara=statPara,illumiCorrection=True,
-#                                 binS=5)
-#     for statPara in [
-#                         'prob',
-#                         'periphmean',
-#                         'periphvar',
-#                         'autoproxmean',
-#                         'autoproxvar',
-#                         'habitatmean',
-#                         'habitatvar',
-#                     ]:
-#         s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-#                                 statPara=statPara,illumiCorrection=True,
-#                                 binS=3)
-    # for statPara in [
-    #                     'TAS',
-    #                 ]:
-    #     s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-    #                             statPara=statPara,illumiCorrection=True,
-    #                             binS=3)
-    # for statPara in [
-    #                     '2DTAS',
-    #                 ]:
-    #     s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-    #                             statPara=statPara,illumiCorrection=True,
-    #                             binS=3)
-    # for statPara in [
-    #                     # 'Hist',
-    #                     # 'GLCM',
-    #                     # 'GLSZM',
-    #                     # 'GLRLM',
-    #                     # 'NGTDM',
-    #                     # 'GLDM',
-    #                 ]:
-    #     s2_o4_3Dinterp_exfeatures_pyrads(project=p,contents=chs,
-    #                             statPara=statPara,illumiCorrection=True,
-    #                             binS=256)
-    # s2_o4_3Dinterp_exfeatures_pyrads(project=p,contents=['DAPI'],
-    #                         statPara='Shape',illumiCorrection=True,
-    #                         binS=256)
+for statPara in [
+                    'TAS',
+                ]:
+    s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
+                            statPara=statPara,illumiCorrection=True,
+                            binS=3)
+for statPara in [
+                    '2DTAS',
+                ]:
+    s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
+                            statPara=statPara,illumiCorrection=True,
+                            binS=3)
         
     
     
