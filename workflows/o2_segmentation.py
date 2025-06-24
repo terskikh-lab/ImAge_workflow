@@ -28,6 +28,7 @@ from subfunctions.dir_rmv_file import dir_rmv_file
 from subfunctions.imreqant import imreqant
 from subfunctions.progressregister import progressregister
 from subfunctions.idxremover import idxremover
+from subfunctions.interp3d import lin3dinterp, shapelin3dinterp
 from subfunctions.ezsave import ezsave
 from subfunctions.ezload import ezload
 from subfunctions.crop3d import crop3d
@@ -204,105 +205,97 @@ def _process_combo(args):
         zStackImgC = basic.transform(zStackImg)[0]
     else:
         zStackImgC = zStackImg
-        
-    #resize the image stack to match the voxel dimensions
-    '''
-    insert process
-    
-    '''
+
     interpFactorZXY = [(2 / voxelDim[0]), (1 / voxelDim[1]), (1 / voxelDim[2])]
     matZ, matY, matX = zStackImgC.shape
     downSampleZ = np.arange(0, matZ, interpFactorZXY[0])
     downSampleX = np.arange(0, matX, interpFactorZXY[2])
     downSampleY = np.arange(0, matY, interpFactorZXY[1])
-    zSigma = 3  # sigma = 7 for z axis is the optimal parameter 2024.08.23
+    
+    normImg = imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
     normImgInterp = lin3dinterp(
-        normImg,
+        filters.unsharp_mask(normImg, radius=3, amount=3),
         downSampleZ,
         downSampleX,
         downSampleY,
     )
     
-    normImg = imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
-    normImg = filters.unsharp_mask(normImg, radius=5, amount=10)
-    
     # Segment the images using Stardist
     if progress_dict is not None:
         progress_dict[key] = "segmenting images..."
         
-    masks, _ = model.predict_instances(normImg, prob_thresh=0.75, )
+    masks, _ = model.predict_instances(normImgInterp, prob_thresh=0.75, )
     
     if progress_dict is not None:
         progress_dict[key] = "segmenting images... done"
 
-        cellsWBkg = np.unique(masks)
-        cellImgList = {}
-        cellLocalCoordList = {}
-        cellGlobalCoordList = {}
-        for cellIdx in range(1, len(cellsWBkg)):
-            croppedImgs = {}
-            tmpMask = (masks == cellsWBkg[cellIdx]).astype(float)
-            _, cropMask, localCoord, globalCoord = crop3d(
-                ROI=tmpMask, img=tmpMask, margin=0, returnCoord=True
-            )
+    cellsWBkg = np.unique(masks)
+    cellImgList = {}
+    cellLocalCoordList = {}
+    cellGlobalCoordList = {}
+    for cellIdx in range(1, len(cellsWBkg)):
+        croppedImgs = {}
+        tmpMask = (masks == cellsWBkg[cellIdx]).astype(float)
+        _, cropMask, localCoord, globalCoord = crop3d(
+            ROI=tmpMask, img=tmpMask, margin=0, returnCoord=True
+        )
 
-            cropMaxZ, cropMaxX, cropMaxY = cropMask.shape
-            upSampleZ = np.arange(0, cropMaxZ, 1 / interpFactorZXY[0])
-            upSampleX = np.arange(0, cropMaxX, 1 / interpFactorZXY[1])
-            upSampleY = np.arange(0, cropMaxY, 1 / interpFactorZXY[2])
-            # upsample the mask
-            cropMaskUpsampled = shapelin3dinterp(
-                cropMask, upSampleZ, upSampleX, upSampleY
-            )
+        cropMaxZ, cropMaxX, cropMaxY = cropMask.shape
+        upSampleZ = np.arange(0, cropMaxZ, 1 / interpFactorZXY[0])
+        upSampleX = np.arange(0, cropMaxX, 1 / interpFactorZXY[1])
+        upSampleY = np.arange(0, cropMaxY, 1 / interpFactorZXY[2])
+        # upsample the mask
+        cropMaskUpsampled = shapelin3dinterp(
+            cropMask, upSampleZ, upSampleX, upSampleY
+        )
 
-            # get upsampled bounding coordinates
-            zmin = np.floor(downSampleZ[globalCoord[0]] + 0.5).astype(int)
-            xmin = np.floor(downSampleX[globalCoord[2]] + 0.5).astype(int)
-            ymin = np.floor(downSampleY[globalCoord[4]] + 0.5).astype(int)
+        # get upsampled bounding coordinates
+        zmin = np.floor(downSampleZ[globalCoord[0]] + 0.5).astype(int)
+        xmin = np.floor(downSampleX[globalCoord[2]] + 0.5).astype(int)
+        ymin = np.floor(downSampleY[globalCoord[4]] + 0.5).astype(int)
 
-            # update local and global coordinates
-            localCoordUpSampled = [
-                np.argmin(np.abs(upSampleZ - localCoord[0])),
-                np.argmin(np.abs(upSampleZ - (localCoord[1] - 1))),
-                np.argmin(np.abs(upSampleX - localCoord[2])),
-                np.argmin(np.abs(upSampleX - (localCoord[3] - 1))),
-                np.argmin(np.abs(upSampleY - localCoord[4])),
-                np.argmin(np.abs(upSampleY - (localCoord[5] - 1))),
-            ]
-            globalCoordUpSampled = [
-                zmin,
-                zmin + localCoordUpSampled[1] - localCoordUpSampled[0],
-                xmin,
-                xmin + localCoordUpSampled[3] - localCoordUpSampled[2],
-                ymin,
-                ymin + localCoordUpSampled[5] - localCoordUpSampled[4],
-            ]
+        # update local and global coordinates
+        localCoordUpSampled = [
+            np.argmin(np.abs(upSampleZ - localCoord[0])),
+            np.argmin(np.abs(upSampleZ - (localCoord[1] - 1))),
+            np.argmin(np.abs(upSampleX - localCoord[2])),
+            np.argmin(np.abs(upSampleX - (localCoord[3] - 1))),
+            np.argmin(np.abs(upSampleY - localCoord[4])),
+            np.argmin(np.abs(upSampleY - (localCoord[5] - 1))),
+        ]
+        globalCoordUpSampled = [
+            zmin,
+            zmin + localCoordUpSampled[1] - localCoordUpSampled[0],
+            xmin,
+            xmin + localCoordUpSampled[3] - localCoordUpSampled[2],
+            ymin,
+            ymin + localCoordUpSampled[5] - localCoordUpSampled[4],
+        ]
 
-            croppedImgs["mask"] = cropMaskUpsampled[
-                localCoordUpSampled[0] : localCoordUpSampled[1],
-                localCoordUpSampled[2] : localCoordUpSampled[3],
-                localCoordUpSampled[4] : localCoordUpSampled[5],
-            ].astype(bool)
-            croppedImgs[segCh] = zStackImg[
-                globalCoordUpSampled[0] : globalCoordUpSampled[1],
-                globalCoordUpSampled[2] : globalCoordUpSampled[3],
-                globalCoordUpSampled[4] : globalCoordUpSampled[5],
-            ].astype(dType)
-            cellImgList["r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)] = (
-                croppedImgs
-            )
-            cellLocalCoordList[
-                "r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)
-            ] = localCoordUpSampled
-            cellGlobalCoordList[
-                "r" + rn + "c" + cn + "f" + fn + "_cell" + str(cellIdx)
-            ] = globalCoordUpSampled
-            print(cellIdx)
+        croppedImgs["mask"] = cropMaskUpsampled[
+            localCoordUpSampled[0] : localCoordUpSampled[1],
+            localCoordUpSampled[2] : localCoordUpSampled[3],
+            localCoordUpSampled[4] : localCoordUpSampled[5],
+        ].astype(bool)
+        croppedImgs[segCh] = zStackImgC[
+            globalCoordUpSampled[0] : globalCoordUpSampled[1],
+            globalCoordUpSampled[2] : globalCoordUpSampled[3],
+            globalCoordUpSampled[4] : globalCoordUpSampled[5],
+        ].astype(dType)
+        cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = (
+            croppedImgs
+        )
+        cellLocalCoordList[
+            f'r{rn}c{cn}f{fn}_cell{cellIdx}'
+        ] = localCoordUpSampled
+        cellGlobalCoordList[
+            f'r{rn}c{cn}f{fn}_cell{cellIdx}'
+        ] = globalCoordUpSampled
 
     for chN in otherCh:
         imgStack = []
         for pn in np.unique(rcfpIdx['zposition']):
-            fileIdx = rcfpIdx[(rcfpIdx['channel'] == chList[chN]) &
+            fileIdx = rcfpIdx[(rcfpIdx['channel'] == chN+1) &
                               (rcfpIdx['field'] == fn) &
                               (rcfpIdx['col'] == cn) &
                               (rcfpIdx['raw'] == rn) &
@@ -316,6 +309,11 @@ def _process_combo(args):
             if progress_dict is not None:
                 progress_dict[key] = f"loading channel {chList[chN]} images... {len(imgStack)}/{len(np.unique(rcfpIdx['zposition']))}"
 
+        if len(imgStack) == 0:
+            if progress_dict is not None:
+                progress_dict[key] = "skipped (some images missing)"
+            return
+        
         zStackImg = np.stack(imgStack, axis=0)
         if illumiCorrection:
             basic = ezload(f'{loadPath1}/model_{chList[chN]}_f{fn}.pickle')['basic']
