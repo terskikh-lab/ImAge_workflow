@@ -18,6 +18,7 @@ from skimage import filters
 import platform    
 import concurrent.futures
 import threading
+import multiprocessing
 
 #import self defined subfunctions========
 from subfunctions.extract_metadata_to_df import extract_metadata_to_df
@@ -61,20 +62,6 @@ def o2_segmentation(project='longiBLOOD',
         os.makedirs(savePath, exist_ok=True)
         
     model = StarDist3D.from_pretrained('3D_demo')
-    # Get the size of the loaded model in GB (disk)
-    import pathlib
-    def get_dir_size_gb(path):
-        total = 0
-        for p in pathlib.Path(path).rglob('*'):
-            if p.is_file():
-                total += p.stat().st_size
-        return total / (1024**3)
-    model_dir = model.config['model_dir'] if 'model_dir' in model.config else getattr(model, 'model_dir', None)
-    if model_dir:
-        model_size_gb = get_dir_size_gb(model_dir)
-        print(f"Loaded StarDist3D model size on disk: {model_size_gb:.3f} GB")
-    else:
-        print("Could not determine model directory for size calculation.")
 
     saveNameAdd=''
     if segCh!='DAPI':
@@ -127,7 +114,7 @@ def o2_segmentation(project='longiBLOOD',
         key = f"field{fn}_col{cn}_row{rn}"
         progress_dict[key] = "pending"
         args_list[i] = args + (progress_dict,)
-        
+
     # Start progress printer in a separate thread
     printer_thread = threading.Thread(
         target=progress_printer,
@@ -135,10 +122,20 @@ def o2_segmentation(project='longiBLOOD',
     )
     printer_thread.start()
 
-    # Run processing in parallel using ThreadPoolExecutor
-    with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
-        list(executor.map(_process_combo, args_list))
+    # Create a semaphore to limit the number of active threads
+    semaphore = threading.Semaphore(nWorkers)
 
+    def thread_wrapper(args):
+        """Wrapper function to acquire and release the semaphore."""
+        with semaphore:
+            _process_combo(args)
+
+    # Create and start threads for processing
+    for args in args_list:
+        thread = threading.Thread(target=thread_wrapper, args=(args,))
+        thread.start()
+
+    # No need to wait for threads to finish
     printer_thread.join()
 
 
@@ -323,9 +320,12 @@ def _process_combo(args):
 
         for cellIdx in range(1, len(cellsWBkg)):
             croppedImgs = cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}']
-            tmpMask = (masks==cellsWBkg[cellIdx]).astype(float)
-            img, _ = crop3d(ROI=tmpMask, img=zStackImgC, margin=3)
-            croppedImgs[chList[chN]] = img.astype(dType)
+            globalCoordUpSampled = cellGlobalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}']
+            croppedImgs[chList[chN]] = zStackImgC[
+                globalCoordUpSampled[0] : globalCoordUpSampled[1],
+                globalCoordUpSampled[2] : globalCoordUpSampled[3],
+                globalCoordUpSampled[4] : globalCoordUpSampled[5],
+            ].astype(dType)
             cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = croppedImgs
 
     ezsave({'cellImgList':cellImgList,
@@ -334,3 +334,14 @@ def _process_combo(args):
             'dummy':[]},
            saveFileName)
     idxremover(idxFileName)
+
+def _process_combo_wrapper(args):
+    """Wrapper function to allow multiprocessing.Pool to call _process_combo."""
+    _process_combo(args)
+    _process_combo(args)
+    idxremover(idxFileName)
+
+def _process_combo_wrapper(args):
+    """Wrapper function to allow multiprocessing.Pool to call _process_combo."""
+    _process_combo(args)
+    _process_combo(args)

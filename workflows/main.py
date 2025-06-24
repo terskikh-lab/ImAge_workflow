@@ -8,7 +8,8 @@ p='brain_3ages_k27me3' #project name, this will be used to save the results
 chs=['DAPI',
      'H3K27me3',
      'H3K27ac',
-     'H3K9ac'] #list of channels to be analyzed. These channels will be used to extract imaging features
+    #  'H3K9ac'
+     ] #list of channels to be analyzed. These channels will be used to extract imaging features
 imageIndex={'ch1':'Channel1PrimaryAntibody',
             'ch2':'Channel2PrimaryAntibody',
             'ch3':'Channel3PrimaryAntibody'}
@@ -20,20 +21,23 @@ resultsSavePath='Data/Results'
 imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
+illumiCorrection=False #whether to run illumination correction or not
+
 #%% ========================================================================================
 # '''
 # Illumination correction 
 # Optional. However recommended to run this step first when data consists of more than 25 wells
 # '''
-# from o1_illumination_correction import o1_illumination_correction
-# o1_illumination_correction(project=p,
-#                            orgDataLoadPath=orgDataLoadPath,
-#                            orgDataSubFolder=orgDataSubFolder,
-#                            resultsSavePath='Data/Results',
-#                            imageFileRegEx=imageFileRegEx,
-#                            imageFileFormat=imageFileFormat,
-#                            nWorkers=10
-#                            )
+# if illumiCorrection:
+    # from o1_illumination_correction import o1_illumination_correction
+    # o1_illumination_correction(project=p,
+    #                            orgDataLoadPath=orgDataLoadPath,
+    #                            orgDataSubFolder=orgDataSubFolder,
+    #                            resultsSavePath='Data/Results',
+    #                            imageFileRegEx=imageFileRegEx,
+    #                            imageFileFormat=imageFileFormat,
+    #                            nWorkers=10
+    #                            )
 
 #%% ========================================================================================
 '''
@@ -57,23 +61,22 @@ o2_segmentation(project=p,
                            imageFileFormat=imageFileFormat,
                            imageIndex=imageIndex,
                            segCh='DAPI',
-                           illumiCorrection=False,
+                           illumiCorrection=illumiCorrection,
                            nWorkers=3,
                            voxelDim=[1,0.6,0.6],
                            )
 
-for statPara in [
-                    'TAS',
-                ]:
-    s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-                            statPara=statPara,illumiCorrection=True,
-                            binS=3)
-for statPara in [
-                    '2DTAS',
-                ]:
-    s2_o4_3Dinterp_exfeatures(project=p,contents=chs,
-                            statPara=statPara,illumiCorrection=True,
-                            binS=3)
+
+#%% ========================================================================================
+'''
+feature extraction
+'''
+# from o3_extract_features import o3_extract_features
+# o3_extract_features(project=p,
+#                     resultsSavePath=resultsSavePath,
+#                     contents=chs,
+#                     illumiCorrection=illumiCorrection,
+#                     nWorkers=50)
         
     
     

@@ -25,6 +25,7 @@ umap-learn = "0.5.3"
 beartype = "0.10.4"
 h5py = "^3.11.0"
 imagecodecs = "2023.7.10"
+mahotas = "^1.4.18"
 
 
 [build-system]
