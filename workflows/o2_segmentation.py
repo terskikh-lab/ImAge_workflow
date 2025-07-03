@@ -334,14 +334,3 @@ def _process_combo(args):
             'dummy':[]},
            saveFileName)
     idxremover(idxFileName)
-
-def _process_combo_wrapper(args):
-    """Wrapper function to allow multiprocessing.Pool to call _process_combo."""
-    _process_combo(args)
-    _process_combo(args)
-    idxremover(idxFileName)
-
-def _process_combo_wrapper(args):
-    """Wrapper function to allow multiprocessing.Pool to call _process_combo."""
-    _process_combo(args)
-    _process_combo(args)
