@@ -25,7 +25,7 @@ from subfunctions.dir_rmv_folder import dir_rmv_folder
 from subfunctions.dir_rmv_file import dir_rmv_file
 from subfunctions.extract_metadata_to_df import extract_metadata_to_df
 from subfunctions.check_zslice_consistency import check_zslice_consistency
-from subfunctions.progress_printer import progress_printer
+from subfunctions.progress_display import ProgressDisplay
 from subfunctions.progressregister import progressregister
 from subfunctions.idxremover import idxremover
 from subfunctions.ezsave import ezsave
@@ -63,34 +63,26 @@ def o1_illumination_correction(project='longiBLOOD',
 
     # Get unique combinations of channel and field
     ch_fn_combos = rcfpIdx[['channel', 'field']].drop_duplicates()
+    
+    jobs = [f"channel{row['channel']}_field{row['field']}" for _, row in ch_fn_combos.iterrows()]
+    display = ProgressDisplay(jobs, nWorkers)
+
     args_list = [
-        (row['channel'], row['field'], savePath, imgPath, rcfpIdx)
-        for _, row in ch_fn_combos.iterrows()
+        (i, row['channel'], row['field'], savePath, imgPath, rcfpIdx)
+        for i, (_, row) in enumerate(ch_fn_combos.iterrows())
     ]
     
-    # Shared dictionary for progress
-    manager = multiprocessing.Manager()
-    progress_dict = manager.dict()
-    for args in args_list:
-        ch, fn = args[0], args[1]
-        progress_dict[f"channel{ch}_field{fn}"] = "pending"
-
-    # Use imported progress_printer
-    printer_proc = multiprocessing.Process(
-        target=progress_printer,
-        args=(progress_dict, 'o1_illumination_correction', len(args_list))
-    )
-    printer_proc.start()
-
+    display.start()
     # Run processing in parallel using threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
         futures = [
-            executor.submit(_process_ch_fn_combo, args + (progress_dict,))
+            executor.submit(_process_ch_fn_combo, args)
             for args in args_list
         ]
-        concurrent.futures.wait(futures)
+        for future in concurrent.futures.as_completed(futures):
+            display.update(future.result())
 
-    printer_proc.join()
+    display.finish()
 
 def projectindexer(name):
     try:
@@ -108,30 +100,18 @@ def _process_ch_fn_combo(args):
     from subfunctions.ezsave import ezsave
 
     # Unpack args
-    if len(args) == 6:
-        ch, fn, savePath, imgPath, rcfpIdx, progress_dict = args
-    else:
-        ch, fn, savePath, imgPath, rcfpIdx = args
-        progress_dict = None
-
-    key = f"channel{ch}_field{fn}"
-    if progress_dict is not None:
-        progress_dict[key] = "processing"
+    index, ch, fn, savePath, imgPath, rcfpIdx = args
 
     #progess register=========================
     saveFileName=f'{savePath}/model_ch{ch}_f{fn}.pickle'
     idxFileName=f'{savePath}/.model_ch{ch}_f{fn}.pickle'
     res=progressregister(saveFileName,idxFileName,returnFileType=True, produceidx=True, recheck=True)
     if res!=0:
-        if progress_dict is not None:
-            status=["file exists", "inprogress file exists"][res-1]
-            progress_dict[key] = f"skipped because {status}"
-        return
+        return {'index': index, 'error': 'skipped'}
     #=========================================
     imgStackCorrection = []
     cn_rn_combos = rcfpIdx[['col', 'raw']].drop_duplicates()
     for _, cn_rn_row in cn_rn_combos.iterrows():
-        progress_dict[key] = "processing: loading images"
         cn = cn_rn_row['col']
         rn = cn_rn_row['raw']
         imgStack = []
@@ -149,15 +129,12 @@ def _process_ch_fn_combo(args):
             tmpImg=tiff.imread(tmpFileName)
             imgStack.append(tmpImg)
             imgCount+=1
-            progress_dict[key] = f"processing: loading images... {imgCount} images loaded for channel {ch}, field {fn}, col {cn}, row {rn}"
         if imgCount!=0:
             imgStackCorrection.append(np.stack(imgStack,axis=0))
     if imgStackCorrection:
-        progress_dict[key] = f"processing: fitting BaSiC model for channel {ch}, field {fn}"
         basic = BaSiC(get_darkfield=True,max_workers=4)
         basic.fit(np.stack(imgStackCorrection,axis=0))
         ezsave({'basic':basic, 'dummy':[]}, saveFileName)
     idxremover(idxFileName)
     
-    if progress_dict is not None:
-        progress_dict[key] = "done"
+    return {'index': index}

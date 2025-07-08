@@ -23,7 +23,7 @@ import multiprocessing
 #import self defined subfunctions========
 from subfunctions.extract_metadata_to_df import extract_metadata_to_df
 from subfunctions.check_zslice_consistency import check_zslice_consistency
-from subfunctions.progress_printer import progress_printer
+from subfunctions.progress_display import ProgressDisplay
 from subfunctions.dir_rmv_folder import dir_rmv_folder
 from subfunctions.dir_rmv_file import dir_rmv_file
 from subfunctions.imreqant import imreqant
@@ -94,49 +94,31 @@ def o2_segmentation(project='longiBLOOD',
     }).drop_duplicates()
 
     # Prepare arguments for parallel processing
+    jobs = [
+        f"field{combo['field']}_col{combo['col']}_row{combo['raw']}"
+        for _, combo in combos.iterrows()
+    ]
+    display = ProgressDisplay(jobs, nWorkers)
+
     args_list = []
-    for _, combo in combos.iterrows():
+    for i, (_, combo) in enumerate(combos.iterrows()):
         fn = combo['field']
         cn = combo['col']
         rn = combo['raw']
         tmpParams = parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
         chList = np.array([tmpParams[i].values[0] for i in imageIndex.values()])
         args_list.append((
-            imageIndex,
+            i, imageIndex,
             fn, cn, rn, parameters, segCh, savePath, saveNameAdd,
             chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, voxelDim
         ))
 
-    # Use a regular dictionary for progress tracking
-    progress_dict = {}
-    for i, args in enumerate(args_list):
-        fn, cn, rn = args[1], args[2], args[3]
-        key = f"field{fn}_col{cn}_row{rn}"
-        progress_dict[key] = "pending"
-        args_list[i] = args + (progress_dict,)
-
-    # Start progress printer in a separate thread
-    printer_thread = threading.Thread(
-        target=progress_printer,
-        args=(progress_dict, 'o2_segmentation', len(args_list))
-    )
-    printer_thread.start()
-
-    # Create a semaphore to limit the number of active threads
-    semaphore = threading.Semaphore(nWorkers)
-
-    def thread_wrapper(args):
-        """Wrapper function to acquire and release the semaphore."""
-        with semaphore:
-            _process_combo(args)
-
-    # Create and start threads for processing
-    for args in args_list:
-        thread = threading.Thread(target=thread_wrapper, args=(args,))
-        thread.start()
-
-    # No need to wait for threads to finish
-    printer_thread.join()
+    display.start()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
+        futures = [executor.submit(_process_combo, args) for args in args_list]
+        for future in concurrent.futures.as_completed(futures):
+            display.update(future.result())
+    display.finish()
 
 
 def projectindexer(name):
@@ -147,14 +129,11 @@ def projectindexer(name):
     
 
 def _process_combo(args):
-    (imageIndex,
+    (
+     i, imageIndex,
      fn, cn, rn, parameters, segCh, savePath, saveNameAdd, 
-     chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, voxelDim, 
-     progress_dict) = args
-
-    key = f"field{fn}_col{cn}_row{rn}"
-    if progress_dict is not None:
-        progress_dict[key] = f"processing"
+     chList, imgPath, rcfpIdx, model, illumiCorrection, loadPath1, voxelDim
+    ) = args
 
     tmpParams = parameters[(parameters['Row'].astype(int)==int(rn)) & (parameters['Column'].astype(int)==int(cn))]
     chList = np.array([tmpParams[i].values[0] for i in imageIndex.values()])
@@ -164,10 +143,7 @@ def _process_combo(args):
     idxFileName = f'{savePath}/.{saveNameAdd}imgs_c{cn}_r{rn}_f{fn}.pickle'
     res=progressregister(saveFileName,idxFileName,returnFileType=True, produceidx=True, recheck=True)
     if res!=0:
-        if progress_dict is not None:
-            status=["file exists", "inprogress file exists"][res-1]
-            progress_dict[key] = f"skipped because {status}"
-        return
+        return {'index': i, 'error': 'skipped'}
     #=========================================
 
     segChIdx = np.where(chList==segCh)[0][0]
@@ -187,19 +163,18 @@ def _process_combo(args):
         tmpImg=tiff.imread(tmpFileName)
         imgStack.append(tmpImg)
         imgCount+=1
-        progress_dict[key] = f"processing: loading images... {imgCount} images loaded for channel {segCh}, field {fn}, col {cn}, row {rn}"
 
     if len(imgStack) == 0:
-        if progress_dict is not None:
-            progress_dict[key] = "skipped (no images found)"
-        return
+        return {'index': i, 'error': 'no images found'}
     
     zStackImg = np.stack(imgStack, axis=0)
     dType = zStackImg.dtype
 
     if illumiCorrection:
-        basic = ezload(f'{loadPath1}/model_{segCh}_f{fn}.pickle')['basic']
-        zStackImgC = basic.transform(zStackImg)[0]
+        
+        loadPath=f'{loadPath1}/model_ch{segChIdx+1}_f{fn}.pickle'
+        basic=ezload(loadPath)['basic']
+        zStackImgC = basic.transform(zStackImg, düzelt=True)
     else:
         zStackImgC = zStackImg
 
@@ -218,115 +193,55 @@ def _process_combo(args):
     )
     
     # Segment the images using Stardist
-    if progress_dict is not None:
-        progress_dict[key] = "segmenting images..."
-        
     masks, _ = model.predict_instances(normImgInterp, prob_thresh=0.75, )
     
-    if progress_dict is not None:
-        progress_dict[key] = "segmenting images... done"
-
     cellsWBkg = np.unique(masks)
     cellImgList = {}
     cellLocalCoordList = {}
     cellGlobalCoordList = {}
     for cellIdx in range(1, len(cellsWBkg)):
-        croppedImgs = {}
-        tmpMask = (masks == cellsWBkg[cellIdx]).astype(float)
-        _, cropMask, localCoord, globalCoord = crop3d(
-            ROI=tmpMask, img=tmpMask, margin=0, returnCoord=True
-        )
-
-        cropMaxZ, cropMaxX, cropMaxY = cropMask.shape
-        upSampleZ = np.arange(0, cropMaxZ, 1 / interpFactorZXY[0])
-        upSampleX = np.arange(0, cropMaxX, 1 / interpFactorZXY[1])
-        upSampleY = np.arange(0, cropMaxY, 1 / interpFactorZXY[2])
-        # upsample the mask
-        cropMaskUpsampled = shapelin3dinterp(
-            cropMask, upSampleZ, upSampleX, upSampleY
-        )
-
-        # get upsampled bounding coordinates
-        zmin = np.floor(downSampleZ[globalCoord[0]] + 0.5).astype(int)
-        xmin = np.floor(downSampleX[globalCoord[2]] + 0.5).astype(int)
-        ymin = np.floor(downSampleY[globalCoord[4]] + 0.5).astype(int)
-
-        # update local and global coordinates
-        localCoordUpSampled = [
-            np.argmin(np.abs(upSampleZ - localCoord[0])),
-            np.argmin(np.abs(upSampleZ - (localCoord[1] - 1))),
-            np.argmin(np.abs(upSampleX - localCoord[2])),
-            np.argmin(np.abs(upSampleX - (localCoord[3] - 1))),
-            np.argmin(np.abs(upSampleY - localCoord[4])),
-            np.argmin(np.abs(upSampleY - (localCoord[5] - 1))),
-        ]
-        globalCoordUpSampled = [
-            zmin,
-            zmin + localCoordUpSampled[1] - localCoordUpSampled[0],
-            xmin,
-            xmin + localCoordUpSampled[3] - localCoordUpSampled[2],
-            ymin,
-            ymin + localCoordUpSampled[5] - localCoordUpSampled[4],
-        ]
-
-        croppedImgs["mask"] = cropMaskUpsampled[
-            localCoordUpSampled[0] : localCoordUpSampled[1],
-            localCoordUpSampled[2] : localCoordUpSampled[3],
-            localCoordUpSampled[4] : localCoordUpSampled[5],
-        ].astype(bool)
-        croppedImgs[segCh] = zStackImgC[
-            globalCoordUpSampled[0] : globalCoordUpSampled[1],
-            globalCoordUpSampled[2] : globalCoordUpSampled[3],
-            globalCoordUpSampled[4] : globalCoordUpSampled[5],
-        ].astype(dType)
-        cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = (
-            croppedImgs
-        )
-        cellLocalCoordList[
-            f'r{rn}c{cn}f{fn}_cell{cellIdx}'
-        ] = localCoordUpSampled
-        cellGlobalCoordList[
-            f'r{rn}c{cn}f{fn}_cell{cellIdx}'
-        ] = globalCoordUpSampled
+        cellMask = masks==cellsWBkg[cellIdx]
+        cellMaskInterp = shapelin3dinterp(cellMask.astype(float),
+                                        np.arange(0,normImgInterp.shape[0]),
+                                        np.arange(0,normImgInterp.shape[1]),
+                                        np.arange(0,normImgInterp.shape[2]),
+                                        zStackImgC.shape[0],
+                                        zStackImgC.shape[1],
+                                        zStackImgC.shape[2])
+        cellMaskInterp = cellMaskInterp > 0.5
+        cellCropped, localCoord, globalCoord = crop3d(zStackImgC, cellMaskInterp, margin=[0,10,10])
+        cellImgList[cellsWBkg[cellIdx]] = {segCh:cellCropped}
+        cellLocalCoordList[cellsWBkg[cellIdx]] = localCoord
+        cellGlobalCoordList[cellsWBkg[cellIdx]] = globalCoord
 
     for chN in otherCh:
         imgStack = []
-        for pn in np.unique(rcfpIdx['zposition']):
-            fileIdx = rcfpIdx[(rcfpIdx['channel'] == chN+1) &
-                              (rcfpIdx['field'] == fn) &
-                              (rcfpIdx['col'] == cn) &
-                              (rcfpIdx['raw'] == rn) &
-                              (rcfpIdx['zposition'] == pn)]
+        imgCount = 0
+        for pn in rcfpIdx['zposition'].unique():
+            fileIdx=rcfpIdx[(rcfpIdx['channel'] == chN+1) &
+                            (rcfpIdx['field'] == fn) &
+                            (rcfpIdx['col'] == cn) &
+                            (rcfpIdx['raw'] == rn) &
+                            (rcfpIdx['zposition'] == pn)]
             if fileIdx.empty:
                 continue
             filename = fileIdx['filename'].values[0]
-            tmpFileName = f'{imgPath}/{filename}'
-            tmpImg = tiff.imread(tmpFileName)
+            tmpFileName=f'{imgPath}/{filename}'
+            tmpImg=tiff.imread(tmpFileName)
             imgStack.append(tmpImg)
-            if progress_dict is not None:
-                progress_dict[key] = f"loading channel {chList[chN]} images... {len(imgStack)}/{len(np.unique(rcfpIdx['zposition']))}"
+            imgCount+=1
 
-        if len(imgStack) == 0:
-            if progress_dict is not None:
-                progress_dict[key] = "skipped (some images missing)"
-            return
-        
-        zStackImg = np.stack(imgStack, axis=0)
-        if illumiCorrection:
-            basic = ezload(f'{loadPath1}/model_{chList[chN]}_f{fn}.pickle')['basic']
-            zStackImgC = basic.transform(zStackImg)[0]
-        else:
-            zStackImgC = zStackImg
-
-        for cellIdx in range(1, len(cellsWBkg)):
-            croppedImgs = cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}']
-            globalCoordUpSampled = cellGlobalCoordList[f'r{rn}c{cn}f{fn}_cell{cellIdx}']
-            croppedImgs[chList[chN]] = zStackImgC[
-                globalCoordUpSampled[0] : globalCoordUpSampled[1],
-                globalCoordUpSampled[2] : globalCoordUpSampled[3],
-                globalCoordUpSampled[4] : globalCoordUpSampled[5],
-            ].astype(dType)
-            cellImgList[f'r{rn}c{cn}f{fn}_cell{cellIdx}'] = croppedImgs
+        if imgCount!=0:
+            zStackImg = np.stack(imgStack, axis=0)
+            if illumiCorrection:
+                loadPath=f'{loadPath1}/model_ch{chN+1}_f{fn}.pickle'
+                basic=ezload(loadPath)['basic']
+                zStackImgC = basic.transform(zStackImg, düzelt=True)
+            else:
+                zStackImgC = zStackImg
+            for cellIdx in range(1, len(cellsWBkg)):
+                cellCropped, localCoord, globalCoord = crop3d(zStackImgC, cellMaskInterp, margin=[0,10,10])
+                cellImgList[cellsWBkg[cellIdx]][chList[chN]] = cellCropped
 
     ezsave({'cellImgList':cellImgList,
             'cellLocalCoordList':cellLocalCoordList,
@@ -334,3 +249,4 @@ def _process_combo(args):
             'dummy':[]},
            saveFileName)
     idxremover(idxFileName)
+    return {'index': i}

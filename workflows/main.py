@@ -62,7 +62,7 @@ Segmentation
 #                            imageIndex=imageIndex,
 #                            segCh='DAPI',
 #                            illumiCorrection=illumiCorrection,
-#                            nWorkers=50,
+#                            nWorkers=3,
 #                            voxelDim=[1,0.6,0.6],
 #                            )
 
@@ -80,22 +80,22 @@ o3_extract_features(project=p,
         
     
     
-from o4_ImAge_validation import o4_ImAge_validation
-import random
-#generate 10 random intenger values using
-rndVals=[]
-for i in range(100):
-    rndVals.append(random.Random(i).randint(0,10000))
+# from o4_ImAge_validation import o4_ImAge_validation
+# import random
+# #generate 10 random intenger values using
+# rndVals=[]
+# for i in range(100):
+#     rndVals.append(random.Random(i).randint(0,10000))
             
-for meanSize in [10]:
-    o4_ImAge_validation(projects=[p],
-                        illumiCorrection=True,
-                        contents=chs,
-                        seeds=rndVals,
-                        meanSize=meanSize,
-                        statParas=['TAS'],
-                        sampleGroups=['Passage'],
-                        )
+# for meanSize in [10]:
+#     o4_ImAge_validation(projects=[p],
+#                         illumiCorrection=True,
+#                         contents=chs,
+#                         seeds=rndVals,
+#                         meanSize=meanSize,
+#                         statParas=['TAS'],
+#                         sampleGroups=['Passage'],
+#                         )
         
 # from fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP import fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP
 # for p in ps:

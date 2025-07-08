@@ -23,7 +23,7 @@ import multiprocessing
 from subfunctions.dir_rmv_folder import dir_rmv_folder
 from subfunctions.dir_rmv_file import dir_rmv_file
 from subfunctions.progressregister import progressregister
-from subfunctions.progress_printer import progress_printer
+from subfunctions.progress_display import ProgressDisplay
 from subfunctions.idxremover import idxremover
 from subfunctions.ezsave import ezsave
 from subfunctions.ezload import ezload
@@ -64,54 +64,42 @@ def o3_extract_features(project='longiBLOOD',
     #get the field of view list
     imgList=dir_rmv_file(loadPath, f'{saveNameAdd}imgs*.pickle')
     
-    # Shared dictionary for progress
-    manager = multiprocessing.Manager()
-    progress_dict = manager.dict()
-    for tmpImg in imgList:
-        progress_dict[tmpImg] = "pending"
+    display = ProgressDisplay(imgList, nWorkers)
 
-    # Use imported progress_printer
-    printer_proc = multiprocessing.Process(
-        target=progress_printer,
-        args=(progress_dict, 'o3_extract_features', len(imgList))
-    )
-    printer_proc.start()
+    args_list = [
+        (i, tmpImg, savePath, saveNameAdd, statPara, contents, loadPath)
+        for i, tmpImg in enumerate(random.sample(imgList, len(imgList)))
+    ]
 
+    display.start()
     # Use multiprocessing instead of ThreadPoolExecutor
     with multiprocessing.Pool(processes=nWorkers) as pool:
-        pool.starmap(
-            _process_image,
-            [
-                (tmpImg, savePath, saveNameAdd, statPara, contents, loadPath, progress_dict)
-                for tmpImg in random.sample(imgList, len(imgList))
-            ]
-        )
+        for result in pool.starmap(_process_image, args_list):
+            display.update(result)
 
-    printer_proc.join()
+    display.finish()
 
 
 # Run processing in parallel using threads
-def _process_image(tmpImg, savePath, saveNameAdd, statPara, contents, loadPath, progress_dict):
+def _process_image(index, tmpImg, savePath, saveNameAdd, statPara, contents, loadPath):
 
     # Check the existence of results (if exists, calculation is skipped)
     saveFileName = f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_{tmpImg}'
     idxFileName = f'{savePath}/.{saveNameAdd}_{statPara}_{"_".join(contents)}_{tmpImg}'
     res = progressregister(saveFileName, idxFileName, recheck=False)
     if res:
-        return
+        return {'index': index, 'error': 'skipped'}
     imgPath = f'{loadPath}/{tmpImg}'
     img = ezload(imgPath)['cellImgList']
     cellList = list(img.keys())
-    progress_dict[tmpImg] = "processing"
     if len(cellList) == 0:
-        progress_dict[tmpImg] = "no cells"
-        return
+        return {'index': index, 'error': 'no cells'}
     availContents = list(img[cellList[0]].keys())
-    availContents.remove('mask')
+    if 'mask' in availContents:
+        availContents.remove('mask')
     counts = np.unique(contents + availContents, return_counts=True)[1]
     if len(contents) != ((counts == 2).sum()):
-        progress_dict[tmpImg] = "contents not fully available"
-        return
+        return {'index': index, 'error': 'contents not fully available'}
 
     cellFeats = []
     for tmpCell in cellList:
@@ -123,13 +111,12 @@ def _process_image(tmpImg, savePath, saveNameAdd, statPara, contents, loadPath, 
         objImgs = [cell[i] for i in contents]
         tmpFeat = ELTAS(dict(zip(contents, objImgs)), mask, contents)
         cellFeats.append(pd.DataFrame({tmpCell: tmpFeat}).transpose())
-        progress_dict[tmpImg] = f"processing {tmpCell} in {tmpImg}"
 
     if len(cellFeats) != 0:
         cellFeats = pd.concat(cellFeats)
         ezsave({'cellFeats': cellFeats, 'dummy': []}, saveFileName)
         idxremover(idxFileName)
-    progress_dict[tmpImg] = "done"
+    return {'index': index}
         
 def ELTAS(tmpFile,mask,keyList):
     allFeats=[]
