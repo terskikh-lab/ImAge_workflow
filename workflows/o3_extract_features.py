@@ -1,4 +1,4 @@
-'''
+"""
 This script extracts texture and shape (TAS) features from 3D segmented cell images.
 It follows the segmentation step (o2_segmentation) and processes the saved cell crops.
 
@@ -9,7 +9,12 @@ The main workflow is as follows:
 4.  The feature extraction is based on the `extract_MIELv023_tas_features` function, which calculates a set of TAS features.
 5.  The extracted features for all cells in a file are compiled into a DataFrame and saved to a new file.
 6.  The process is parallelized using multiprocessing to handle multiple image files concurrently.
-'''
+
+Author:
+    Kenta Ninomiya
+    Harry Perkins Institute of Medical Research/ the Univeristy of Western Australia
+    Date: 2025/07/15
+"""
 
 #import modules=======================
 import os
@@ -21,6 +26,7 @@ import pandas as pd
 from scipy import ndimage
 import concurrent.futures
 import multiprocessing
+from typing import List, Dict, Any
 
 
 #import self defined functions========
@@ -37,7 +43,7 @@ from subfunctions.ELTA_functions import extract_MIELv023_tas_features
 
 def o3_extract_features(project: str = 'longiBLOOD',
                         resultsSavePath: str = '../Data/Results',
-                        contents: list = [
+                        contents: List[str] = [
                                         'DAPI',
                                         'H3K4me1',
                                         'H3K27ac',
@@ -45,7 +51,7 @@ def o3_extract_features(project: str = 'longiBLOOD',
                         segCh: str = 'DAPI',
                         illumiCorrection: bool = True,
                         nWorkers: int = 1,
-                        ):
+                        ) -> None:
     """
     Extracts features from segmented 3D cell images.
 
@@ -56,7 +62,7 @@ def o3_extract_features(project: str = 'longiBLOOD',
     Args:
         project (str, optional): The name of the project. Defaults to 'longiBLOOD'.
         resultsSavePath (str, optional): Path to save the results. Defaults to '../Data/Results'.
-        contents (list, optional): List of channel names to extract features from.
+        contents (List[str], optional): List of channel names to extract features from.
                                       Defaults to ['DAPI', 'H3K4me1', 'H3K27ac'].
         segCh (str, optional): The channel used for segmentation, used to construct file names.
                                Defaults to 'DAPI'.
@@ -103,7 +109,7 @@ def o3_extract_features(project: str = 'longiBLOOD',
 
 
 # Run processing in parallel using threads
-def _process_image(index: int, tmpImg: str, savePath: str, saveNameAdd: str, statPara: str, contents: list, loadPath: str):
+def _process_image(index: int, tmpImg: str, savePath: str, saveNameAdd: str, statPara: str, contents: List[str], loadPath: str) -> Dict[str, Any]:
     """
     Worker function to process a single image file from segmentation.
 
@@ -116,11 +122,11 @@ def _process_image(index: int, tmpImg: str, savePath: str, saveNameAdd: str, sta
         savePath (str): The directory to save the feature files.
         saveNameAdd (str): A prefix for the save file name based on settings.
         statPara (str): The type of statistics to compute (e.g., 'TAS').
-        contents (list): A list of channel names to extract features from.
+        contents (List[str]): A list of channel names to extract features from.
         loadPath (str): The directory where the segmented data is stored.
 
     Returns:
-        dict: A dictionary with the job index and an error message if applicable.
+        Dict[str, Any]: A dictionary with the job index and an error message if applicable.
     """
     # Check the existence of results (if exists, calculation is skipped)
     saveFileName = f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_{tmpImg}'
@@ -157,14 +163,14 @@ def _process_image(index: int, tmpImg: str, savePath: str, saveNameAdd: str, sta
         idxremover(idxFileName)
     return {'index': index}
         
-def ELTAS(tmpFile: dict, mask: np.ndarray, keyList: list):
+def ELTAS(tmpFile: Dict[str, np.ndarray], mask: np.ndarray, keyList: List[str]) -> pd.DataFrame:
     """
     Computes TAS (Texture and Shape) features for a single cell across multiple channels.
 
     Args:
-        tmpFile (dict): A dictionary where keys are channel names and values are the corresponding 3D image arrays for a single cell.
+        tmpFile (Dict[str, np.ndarray]): A dictionary where keys are channel names and values are the corresponding 3D image arrays for a single cell.
         mask (np.ndarray): The 3D binary mask for the cell.
-        keyList (list): A list of channel names (keys in tmpFile) to process.
+        keyList (List[str]): A list of channel names (keys in tmpFile) to process.
 
     Returns:
         pd.DataFrame: A DataFrame containing the concatenated features from all specified channels for the cell.

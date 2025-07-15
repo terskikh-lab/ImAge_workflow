@@ -1,4 +1,4 @@
-'''
+"""
 This script performs 3D segmentation of cells from microscopy images using the StarDist model.
 It processes images from a specified project, applies illumination correction if enabled,
 and segments cells in a designated channel (e.g., DAPI).
@@ -12,7 +12,12 @@ The workflow is as follows:
 6.  For each segmented cell, it crops out the cell region from all channels, creating a small 3D image of each cell.
 7.  The cropped cell images and their coordinates are saved to a file.
 8.  The process is parallelized to handle multiple image sets concurrently.
-'''
+
+Author:
+    Kenta Ninomiya
+    Harry Perkins Institute of Medical Research/ the Univeristy of Western Australia
+    Date: 2025/07/15
+"""
 
 #import modules=======================
 import os
@@ -29,6 +34,8 @@ import platform
 import concurrent.futures
 import threading
 import multiprocessing
+import re
+from typing import List, Dict, Optional, Any
 
 #import self defined subfunctions========
 from subfunctions.extract_metadata_to_df import extract_metadata_to_df
@@ -51,7 +58,7 @@ def o2_segmentation(project: str = 'longiBLOOD',
                            orgDataLoadPath: str = '../Data/Original',
                            orgDataSubFolder: str = 'Images',
                            resultsSavePath: str = '../Data/Results',
-                           imageFileRegEx: str = '',
+                           imageFileRegEx: re.Pattern = re.compile(r''),
                            imageFileFormat: str = '.tiff',
                            imageIndex: dict = {'ch1':'Channel1PrimaryAntibody',
                                        'ch2':'Channel2PrimaryAntibody',
@@ -61,7 +68,7 @@ def o2_segmentation(project: str = 'longiBLOOD',
                            illumiCorrection: bool = False,
                            nWorkers: int = 4,
                            voxelDim: list = [1,0.5,0.5]  # [z, y, x] in micrometers
-                           ):
+                           ) -> None:
     """
     Performs 3D segmentation of cells in microscopy images.
 
@@ -74,7 +81,7 @@ def o2_segmentation(project: str = 'longiBLOOD',
         orgDataLoadPath (str, optional): Path to the original data. Defaults to '../Data/Original'.
         orgDataSubFolder (str, optional): Subfolder containing images. Defaults to 'Images'.
         resultsSavePath (str, optional): Path to save results. Defaults to '../Data/Results'.
-        imageFileRegEx (str, optional): Regex for image metadata extraction. Defaults to ''.
+        imageFileRegEx (re.Pattern, optional): Regex for image metadata extraction. Defaults to an empty compiled regex.
         imageFileFormat (str, optional): Image file format. Defaults to '.tiff'.
         imageIndex (dict, optional): Mapping of channel numbers to antibody names.
         segCh (str, optional): The channel name to be used for segmentation. Defaults to 'DAPI'.
@@ -151,7 +158,7 @@ def o2_segmentation(project: str = 'longiBLOOD',
     display.finish()
 
 
-def projectindexer(name: str):
+def projectindexer(name: str) -> Optional[str]:
     """
     Extracts the project name from a folder name.
 
@@ -161,15 +168,15 @@ def projectindexer(name: str):
         name (str): The folder name.
 
     Returns:
-        str or None: The extracted project name, or None if not found.
+        Optional[str]: The extracted project name, or None if not found.
     """
     try:
         return(name.split('[')[1].split(']')[0])
     except:
-        return()
+        return None
     
 
-def _process_combo(args: tuple):
+def _process_combo(args: tuple) -> Dict[str, Any]:
     """
     Worker function to process a single image set (field/column/row combination).
 
@@ -181,7 +188,7 @@ def _process_combo(args: tuple):
                       such as file paths, metadata, models, and settings.
     
     Returns:
-        dict: A dictionary with the job index and an error message if applicable.
+        Dict[str, Any]: A dictionary with the job index and an error message if applicable.
     """
     (
      i, imageIndex,

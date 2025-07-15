@@ -1,4 +1,4 @@
-'''
+"""
 This script is for building and validating a machine learning model to create an "ImAge" axis,
 which is a one-dimensional projection of high-dimensional cellular features that correlates with age.
 The model is a linear Support Vector Machine (SVM) trained to distinguish between 'young' and 'old' samples.
@@ -14,7 +14,12 @@ The workflow is as follows:
     d. Project both training and testing data onto this ImAge axis.
     e. Save the projected scores, the ImAge axis vector, and associated metadata for each seed.
 4.  The script supports parallel processing for both data loading and model training across different seeds.
-'''
+
+Author:
+    Kenta Ninomiya
+    Harry Perkins Institute of Medical Research/ the Univeristy of Western Australia
+    Date: 2025/07/15
+"""
 
 #import modules=======================
 import os
@@ -24,7 +29,8 @@ import pandas as pd
 import numpy as np
 from sklearn import svm
 import concurrent.futures
-import threading
+from typing import List, Dict, Any
+
 #import self defined functions========
 from subfunctions.paramerge import paramerge
 from subfunctions.loadPathGenerator import loadPathGenerator
@@ -32,32 +38,32 @@ from subfunctions.dir_rmv_file import dir_rmv_file
 from subfunctions.progressregister import progressregister
 from subfunctions.progress_display import ProgressDisplay
 from subfunctions.idxremover import idxremover
-from subfunctions.imreqant import imreqant
 from subfunctions.ezsave import ezsave
 from subfunctions.ezload import ezload
 #=====================================
 
-def o4_ImAge_validation(projects: list[str] = ['project'],
-                            statParas: list[str] = ['TAS'],
-                            contents: list[str] = [
+def o4_ImAge_validation(projects: List[str] = ['project'],
+                        resultsSavePath: str = '../Data/Results',
+                            statParas: List[str] = ['TAS'],
+                            contents: List[str] = [
                                 'DAPI',
                                 'H3K4me1',
                                 'H3K27ac',
                                       ],
                             meanSize: int = 200,
                             nBoot: int = 1000,
-                            groups: list[str] = [
+                            groups: List[str] = [
                                 'ExperimentalCondition',
                                     ],
-                            labels: list[str] = ['young_i4F_untreated','old_i4F_untreated'],
-                            sampleGroups: list[str] = ['Passage','ExperimentalCondition'],
+                            labels: List[str] = ['young', 'old'],
+                            sampleGroups: List[str] = ['ExperimentalCondition'],
                             segCh: str = 'DAPI',
                             illumiCorrection: bool = True,
-                            seeds: list[int] = [0,1,2,3,4,5],
+                            seeds: List[int] = [0,1,2,3,4,5],
                             youngLabel: str = 'young',
                             oldLabel: str = 'old',
                             nWorkers: int = 4,
-                            ):
+                            ) -> None:
     """
     Constructs and validates an ImAge axis using a linear SVM.
 
@@ -65,35 +71,38 @@ def o4_ImAge_validation(projects: list[str] = ['project'],
     training and saving results across multiple random seeds for validation.
 
     Args:
-        projects (list[str], optional): List of project names to include. Defaults to ['project'].
-        statParas (list[str], optional): List of feature types to use. Defaults to ['TAS'].
-        contents (list[str], optional): List of channels used for feature extraction.
+        projects (List[str], optional): List of project names to include. Defaults to ['project'].
+        resultsSavePath (str, optional): Path to save the results. Defaults to '../Data/Results'.
+        statParas (List[str], optional): List of feature types to use. Defaults to ['TAS'].
+        contents (List[str], optional): List of channels used for feature extraction.
         meanSize (int, optional): Number of cells to average in each bootstrap sample. Defaults to 200.
         nBoot (int, optional): Number of bootstrap iterations. Defaults to 1000.
-        groups (list[str], optional): Metadata columns to define sample groups. Defaults to ['ExperimentalCondition'].
-        labels (list[str], optional): Specific labels to be used for training/validation split.
-        sampleGroups (list[str], optional): Metadata columns to define unique samples for bootstrapping.
+        groups (List[str], optional): Metadata columns to define sample groups. Defaults to ['ExperimentalCondition'].
+        labels (List[str], optional): Specific labels to be used for training/validation split.
+        sampleGroups (List[str], optional): Metadata columns to define unique samples for bootstrapping.
         segCh (str, optional): Segmentation channel, for file naming. Defaults to 'DAPI'.
         illumiCorrection (bool, optional): If illumination correction was used, for file naming. Defaults to True.
-        seeds (list[int], optional): List of random seeds for train/test splits. Defaults to [0,1,2,3,4,5].
+        seeds (List[int], optional): List of random seeds for train/test splits. Defaults to [0,1,2,3,4,5].
         youngLabel (str, optional): Label identifier for 'young' samples. Defaults to 'young'.
         oldLabel (str, optional): Label identifier for 'old' samples. Defaults to 'old'.
         nWorkers (int, optional): Number of parallel workers. Defaults to 4.
     """
     #Initialization=======================
-    parameter=paramerge(paramPath='../Data/Results/Parameters', projects=[project.split('iC_')[-1] for project in projects])
-    loadPaths0=loadPathGenerator(loadPath='../Data/Results', 
+    parameter=paramerge(paramPath=f'{resultsSavePath}/Parameters', projects=[project.split('iC_')[-1] for project in projects])
+    loadPaths0=loadPathGenerator(loadPath=resultsSavePath, 
                                 projects=projects, 
                                 loadFolder='o3_extract_features')
-    savePath='../Data/Results/'+'_'.join(projects)+'/o4_ImAge_validation'
+    savePath=f'../Data/Results/{"_".join(projects)}/o4_ImAge_validation'
     os.makedirs(savePath, exist_ok=True)
     trainRatio=0.75
         
     saveNameAdd=''
     if segCh!='DAPI':
-        saveNameAdd='seg_'+segCh
+        saveNameAdd=f'seg_{segCh}'
     if illumiCorrection==False:
-        saveNameAdd='noIC_'+saveNameAdd
+        saveNameAdd=f'noIC_{saveNameAdd}'
+        
+    statPara='TAS'
         
     #reorder them by alphabetical order
     contents.sort()
@@ -102,8 +111,8 @@ def o4_ImAge_validation(projects: list[str] = ['project'],
     labels.sort()
     #======================================
     # Check the existence of results (if exists, calculation is skipped)=======================
-    saveFileName1=f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_meanS{meanSize}_nBoot{nBoot}_SEEDNUM_'+'_'.join(groups)+'_'+'_'.join(labels)+'.pickle'
-    idxFileName1=f'{savePath}/.{saveNameAdd}_{statPara}_{"_".join(contents)}_meanS{meanSize}_nBoot{nBoot}_SEEDNUM_'+'_'.join(groups)+'_'+'_'.join(labels)+'.pickle'
+    saveFileName1=f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_meanS{meanSize}_nBoot{nBoot}_SEEDNUM_{"_".join(groups)}_{"_".join(labels)}.pickle'
+    idxFileName1=f'{savePath}/.{saveNameAdd}_{statPara}_{"_".join(contents)}_meanS{meanSize}_nBoot{nBoot}_SEEDNUM_{"_".join(groups)}_{"_".join(labels)}.pickle'
 
     savedFiles=dir_rmv_file(savePath,saveFileName1.replace('SEEDNUM','*'))
     idxFiles=dir_rmv_file(savePath,idxFileName1.replace('SEEDNUM','*'))
@@ -201,7 +210,7 @@ def o4_ImAge_validation(projects: list[str] = ['project'],
     display.finish()
 
 
-def _process_well(args: tuple):
+def _process_well(args: tuple) -> Dict[str, Any]:
     """
     Worker function to load and process features from a single well.
 
@@ -209,26 +218,27 @@ def _process_well(args: tuple):
         args (tuple): A tuple containing:
             i (int): Job index.
             loadPath (str): Path to the feature data.
-            statParas (list[str]): List of feature types to load.
+            statParas (List[str]): List of feature types to load.
             tmpLoadData (str): Filename identifier for the well.
             parameter (pd.DataFrame): Metadata dataframe.
-            groups (list[str]): Metadata columns to define sample groups.
+            groups (List[str]): Metadata columns to define sample groups.
 
     Returns:
-        dict: A dictionary containing the aggregated features, labels, and metadata for the well.
+        Dict[str, Any]: A dictionary containing the aggregated features, labels, and metadata for the well.
     """
     i, loadPath, statParas, tmpLoadData, parameter, groups = args
     wellFeatStack=pd.DataFrame()
     for statPara in statParas:
-        statPath=loadPath+'/'+statPara+'_'+tmpLoadData
+        statPath=f'{loadPath}/{statPara}_{tmpLoadData}'
         tmpFeat=ezload(statPath)['cellFeats']
-        print(statPath+' loaded')
+        print(f'{statPath} loaded')
         wellFeatStack=pd.concat([wellFeatStack,tmpFeat],axis=1,sort=False)
     #contain the number of cells in each tmpLoadData
     row=tmpLoadData.split('_r')[1].split('_f')[0]
     col=tmpLoadData.split('_c')[1].split('_r')[0]
-    tmpCond='_'.join(parameter.loc[parameter['WellIndex']==('00'+row)[-3:]+('00'+col)[-3:]][groups].values[0])
-    tmpAllParam=parameter.loc[parameter['WellIndex']==('00'+row)[-3:]+('00'+col)[-3:]]
+    well_index = f"{('00' + row)[-3:]}{('00' + col)[-3:]}"
+    tmpCond='_'.join(parameter.loc[parameter['WellIndex']==well_index][groups].values[0])
+    tmpAllParam=parameter.loc[parameter['WellIndex']==well_index]
 
     label = np.repeat(tmpCond,len(wellFeatStack))
     allParams = pd.concat([tmpAllParam]*len(wellFeatStack), ignore_index=True)
@@ -236,7 +246,7 @@ def _process_well(args: tuple):
     return {'index': i, 'wellFeatStack': wellFeatStack, 'label': label, 'allParams': allParams}
 
 
-def _process_seed(args: tuple):
+def _process_seed(args: tuple) -> Dict[str, Any]:
     """
     Worker function to run the training and validation for a single random seed.
 
@@ -247,7 +257,7 @@ def _process_seed(args: tuple):
         args (tuple): A tuple containing all necessary data and parameters for one seed run.
 
     Returns:
-        dict: A dictionary with the job index and an error message if applicable.
+        Dict[str, Any]: A dictionary with the job index and an error message if applicable.
     """
     i, seed, saveFileName1, idxFileName1, numericIdxTrainVal, trainRatio, numericIdxTestRest, allParams, sampleGroups, numericIdx, nBoot, meanSize, featStack, labelStack, oldLabel = args
     saveFileNameSeed=saveFileName1.replace('SEEDNUM',f'seed{seed}')

@@ -1,3 +1,42 @@
+"""
+Main workflow script for the ImAge analysis pipeline.
+
+Description:
+    This script orchestrates the entire ImAge analysis workflow, from raw image
+    processing to feature extraction and validation. It is configured via a set
+    of variables at the beginning of the file, allowing users to specify project
+    names, data paths, and analysis parameters.
+
+    The workflow consists of the following main steps:
+    1.  **Illumination Correction (Optional):** Corrects for non-uniform
+        illumination in the images. This step is controlled by the
+        `illumiCorrection` flag.
+    2.  **Segmentation:** Segments nuclei in the images based on a specified
+        channel (e.g., DAPI).
+    3.  **Feature Extraction:** Extracts various imaging features from the
+        segmented nuclei across all specified channels.
+    4.  **ImAge Validation:** Performs validation of the ImAge model by training
+        and testing on the extracted features.
+
+Configuration:
+    - `p` (str): Project name. Used for organizing results.
+    - `chs` (List[str]): List of channels to be analyzed.
+    - `imageIndex` (Dict[str, str]): Mapping of channel numbers to antibody names.
+    - `orgDataLoadPath` (str): Path to the original imaging data.
+    - `orgDataSubFolder` (str): Subfolder within the data path containing images.
+    - `resultsSavePath` (str): Path where analysis results will be saved.
+    - `imageFileRegEx` (re.Pattern): Regular expression to parse image filenames.
+    - `imageFileFormat` (str): File format of the images (e.g., '.tiff').
+    - `illumiCorrection` (bool): Flag to enable or disable illumination correction.
+
+Usage:
+    Configure the variables at the top of the script and then run it from the
+    command line. A GPU can be specified as a command-line argument for the
+    segmentation step.
+    
+    Example:
+        python main.py 0  # Runs segmentation on GPU 0
+"""
 #exeP_Reprogramming.py
 import re
 
@@ -24,47 +63,47 @@ imageFileFormat='.tiff'
 illumiCorrection=False #whether to run illumination correction or not
 
 #%% ========================================================================================
-# '''
-# Illumination correction 
-# Optional. However recommended to run this step first when data consists of more than 25 wells
-# '''
-# if illumiCorrection:
-    # from o1_illumination_correction import o1_illumination_correction
-    # o1_illumination_correction(project=p,
-    #                            orgDataLoadPath=orgDataLoadPath,
-    #                            orgDataSubFolder=orgDataSubFolder,
-    #                            resultsSavePath='Data/Results',
-    #                            imageFileRegEx=imageFileRegEx,
-    #                            imageFileFormat=imageFileFormat,
-    #                            nWorkers=10
-    #                            )
+'''
+Illumination correction 
+Optional. However recommended to run this step first when data consists of more than 25 wells
+'''
+if illumiCorrection:
+    from o1_illumination_correction import o1_illumination_correction
+    o1_illumination_correction(project=p,
+                               orgDataLoadPath=orgDataLoadPath,
+                               orgDataSubFolder=orgDataSubFolder,
+                               resultsSavePath='Data/Results',
+                               imageFileRegEx=imageFileRegEx,
+                               imageFileFormat=imageFileFormat,
+                               nWorkers=10
+                               )
 
 #%% ========================================================================================
 '''
 Segmentation
 '''
-# import sys
-# try:
-#     gpuN=int(sys.argv[1])
-# except:
-#     gpuN=None
+import sys
+try:
+    gpuN=int(sys.argv[1])
+except:
+    gpuN=None
     
-# from subfunctions.gpuinit import gpuinit
-# gpuinit(gpuN=gpuN)
+from subfunctions.gpuinit import gpuinit
+gpuinit(gpuN=gpuN)
 
-# from o2_segmentation import o2_segmentation
-# o2_segmentation(project=p,
-#                 orgDataLoadPath=orgDataLoadPath,
-#                 orgDataSubFolder=orgDataSubFolder,
-#                 resultsSavePath=resultsSavePath,
-#                            imageFileRegEx=imageFileRegEx,
-#                            imageFileFormat=imageFileFormat,
-#                            imageIndex=imageIndex,
-#                            segCh='DAPI',
-#                            illumiCorrection=illumiCorrection,
-#                            nWorkers=3,
-#                            voxelDim=[1,0.6,0.6],
-#                            )
+from o2_segmentation import o2_segmentation
+o2_segmentation(project=p,
+                orgDataLoadPath=orgDataLoadPath,
+                orgDataSubFolder=orgDataSubFolder,
+                resultsSavePath=resultsSavePath,
+                           imageFileRegEx=imageFileRegEx,
+                           imageFileFormat=imageFileFormat,
+                           imageIndex=imageIndex,
+                           segCh='DAPI',
+                           illumiCorrection=illumiCorrection,
+                           nWorkers=3,
+                           voxelDim=[1,0.6,0.6],
+                           )
 
 
 #%% ========================================================================================
@@ -80,77 +119,19 @@ o3_extract_features(project=p,
         
     
     
-# from o4_ImAge_validation import o4_ImAge_validation
-# import random
-# #generate 10 random intenger values using
-# rndVals=[]
-# for i in range(100):
-#     rndVals.append(random.Random(i).randint(0,10000))
+from o4_ImAge_validation import o4_ImAge_validation
+import random
+#generate 10 random intenger values using
+rndVals=[]
+for i in range(100):
+    rndVals.append(random.Random(i).randint(0,10000))
             
-# for meanSize in [10]:
-#     o4_ImAge_validation(projects=[p],
-#                         illumiCorrection=True,
-#                         contents=chs,
-#                         seeds=rndVals,
-#                         meanSize=meanSize,
-#                         statParas=['TAS'],
-#                         sampleGroups=['Passage'],
-#                         )
-        
-# from fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP import fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP
-# for p in ps:
-#     # for meanSize in [200, 100, 50, 10]:
-#     for meanSize in [200]:
-#         fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=[p],
-#                                             contents=chs,
-#                                             meanSize=meanSize,)        
-
-# # from s2_o5_randboot_EpiAge_lsvm_singlecell import s2_o5_randboot_EpiAge_lsvm_singlecell
-# # import random
-# # #generate 10 random intenger values using
-# # rndVals=[]
-# # for i in range(100):
-# #     rndVals.append(random.Random(i).randint(0,10000))
-    
-# # for p in ps:
-# #     for meanSize in [200]:
-# #         for sd in rndVals:
-# #             s2_o5_randboot_EpiAge_lsvm_singlecell(projects=[p],
-# #                                                 illumiCorrection=True,
-# #                                                 contents=chs,
-# #                                                 seed=sd,
-# #                                                 meanSize=meanSize,
-# #                                                 sampleGroups=['Passage'],
-# #                                                 )
-            
-
-# from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN
-# for p in ps:
-#     for meanSize in [200]:
-#         fig_s2_o5_randboot_EpiAge_lsvm_singlecell_VIOLIN(projects=[p],
-#                                             contents=chs,
-#                                             meanSize=meanSize,)
-
-# # from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_hUMAP import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_hUMAP
-# # for p in ps:
-# #     for meanSize in [200]:
-# #         fig_s2_o5_randboot_EpiAge_lsvm_singlecell_hUMAP(projects=[p],
-# #                                             contents=chs,
-# #                                             meanSize=meanSize,)
-        
-
-# # from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP
-# # for p in ps:
-# #     for meanSize in [200]:
-# #         fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP(projects=[p],
-# #                                             contents=chs,
-# #                                             meanSize=meanSize,)
-        
-
-# # from fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP_annotation import fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP_annotation
-# # for p in ps:
-# #     for meanSize in [200]:
-# #         fig_s2_o5_randboot_EpiAge_lsvm_singlecell_UMAP_annotation(projects=[p],
-# #                                                                     contents=chs,
-# #                                                                     meanSize=meanSize,)
-        
+for meanSize in [10]:
+    o4_ImAge_validation(projects=[p],
+                        illumiCorrection=True,
+                        contents=chs,
+                        seeds=rndVals,
+                        meanSize=meanSize,
+                        nBoot=1000,
+                        sampleGroups=['Passage'],
+                        )

@@ -1,10 +1,31 @@
-'''
-Description fig_o4_ImAge_validation_VIOLIN.py
-========================================
-visualize the result of s2_o5_randommean_LR_labels.py with violin plot
-========================================
-Kenta Ninomiya @ Sanford Burnham Prebys Medical Discovery Institute: 2023/03/27
-'''
+"""
+This script visualizes ImAge validation results using violin plots.
+
+Description:
+    This script generates violin plots to visualize the results of the ImAge validation
+    workflow. It processes the output files from the validation step, calculates
+    performance metrics like accuracy, and creates various plots to compare
+    predictions across different samples and groups for both training and test sets.
+
+    The main function, `fig_o4_ImAge_validation_VIOLIN`, handles:
+    - Loading validation data.
+    - Calculating accuracy and other metrics.
+    - Generating and saving violin plots and box plots for prediction distributions.
+    - Performing statistical tests (Mann-Whitney U test, Levene's test) to compare groups.
+
+    The script is configurable through the parameters of the main function, allowing
+    for analysis of different projects, feature sets, and experimental conditions.
+
+Usage:
+    This script is intended to be run as part of the ImAge analysis workflow.
+    The `fig_o4_ImAge_validation_VIOLIN` function can be called from other scripts
+    (e.g., a main workflow script) with appropriate parameters.
+
+Author:
+    Kenta Ninomiya
+    Harry Perkins Institute of Medical Research/ the Univeristy of Western Australia
+    Date: 2025/07/15
+"""
 
 #import modules=======================
 import os
@@ -15,6 +36,7 @@ import numpy as np
 from sklearn.metrics import roc_curve, auc
 import plotly.graph_objects as go
 import scipy.stats as stats
+from typing import List, Dict
 
 #import self defined functions========
 from subfunctions.paramerge import paramerge
@@ -25,89 +47,104 @@ from subfunctions.ezload import ezload
 #=====================================
 
 
-def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
-                            binS=3,
-                            statParas=['TAS'],
-                            contents=[
+def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
+                            contents: List[str] = [
                                 'DAPI',
                                 'H3K4me1',
                                 'H3K27ac',
                                       ],
-                            meanSize=200,
-                            groups=[
+                            meanSize: int = 200,
+                            groups: List[str] = [
                                 'ExperimentalCondition',    
                                     ],
-                            labels=['young_i4F_untreated','old_i4F_untreated'],
-                            segCh='DAPI',
-                            nBoot=1000,
-                            illumiCorrection=True,
-                            sampleSpecific=True,
-                            colorsTrain={#young  
-                                        '457':'#20fc08',
-                                        '1155':'#13ad02',
-                                        '1158':'#45f731',
-                                        '1163':'#299e1c',
-                                        '1164':'#60f250',
+                            labels: List[str] = ['young','old'],
+                            segCh: str = 'DAPI',
+                            nBoot: int = 1000,
+                            illumiCorrection: bool = True,
+                            sampleSpecific: bool = True,
+                            colorsTrain: Dict[str, str] = {#young  
+                                        'mouse1':'#20fc08',
+                                        'mouse2':'#13ad02',
+                                        'mouse3':'#45f731',
+                                        'mouse4':'#299e1c',
+                                        'mouse5':'#60f250',
                                         #old
-                                        '1000':'#99360c',
-                                        '1001':'#752a0b',
-                                        '1002':'#9e4520',
-                                        '1003':'#c74914',
-                                        '1051':'#9e4c29',
+                                        'mouse11':'#99360c',
+                                        'mouse12':'#752a0b',
+                                        'mouse13':'#9e4520',
+                                        'mouse14':'#c74914',
+                                        'mouse15':'#9e4c29',
                                         },
-                            colorsTrainAll={#young  
-                                            'young_i4F_untreated':'#20fc08',
-                                            'old_i4F_untreated':'#99360c',
+                            colorsTrainAll: Dict[str, str] = {#young  
+                                            'young':'#20fc08',
+                                            'old':'#99360c',
                                             },
-                            colorsTest={#young  
-                                        '457':'#20fc08',
-                                        '1155':'#13ad02',
-                                        '1158':'#45f731',
-                                        '1163':'#299e1c',
-                                        '1164':'#60f250',
+                            colorsTest: Dict[str, str] = {#young  
+                                        'mouse1':'#20fc08',
+                                        'mouse2':'#13ad02',
+                                        'mouse3':'#45f731',
+                                        'mouse4':'#299e1c',
+                                        'mouse5':'#60f250',
                                         #old treated
-                                        '384':'#d9a600',
-                                        '1010':'#a68003',
-                                        '1011':'#ffca1c',
-                                        '1025':'#ad8a17',
-                                        '1027':'#f0c435',
+                                        'mouse6':'#d9a600',
+                                        'mouse7':'#a68003',
+                                        'mouse8':'#ffca1c',
+                                        'mouse9':'#ad8a17',
+                                        'mouse10':'#f0c435',
                                         #old untreated
-                                        '1000':'#99360c',
-                                        '1001':'#752a0b',
-                                        '1002':'#9e4520',
-                                        '1003':'#c74914',
-                                        '1051':'#9e4c29',
+                                        'mouse11':'#99360c',
+                                        'mouse12':'#752a0b',
+                                        'mouse13':'#9e4520',
+                                        'mouse14':'#c74914',
+                                        'mouse15':'#9e4c29',
                                         },
-                            colorsTestAll={
-                                        'young_i4F_untreated':'#20fc08',
-                                        'old_i4F_treated':'#d9a600',
-                                        'old_i4F_untreated':'#99360c',
+                            colorsTestAll: Dict[str, str] = {
+                                        'young':'#20fc08',
+                                        'middle':'#d9a600',
+                                        'old':'#99360c',
                                         }
-                            ):
+                            ) -> None:
+    """
+    Visualizes the result of ImAge validation with violin plots.
 
+    Args:
+        projects (List[str], optional): List of project names. Defaults to ['longiBLOOD'].
+        binS (int, optional): Bin size. Defaults to 3.
+        statParas (List[str], optional): List of statistical parameters. Defaults to ['TAS'].
+        contents (List[str], optional): List of content names. Defaults to ['DAPI', 'H3K4me1', 'H3K27ac'].
+        meanSize (int, optional): Mean size. Defaults to 200.
+        groups (List[str], optional): List of group names. Defaults to ['ExperimentalCondition'].
+        labels (List[str], optional): List of labels. Defaults to ['young', 'old'].
+        segCh (str, optional): Segmentation channel. Defaults to 'DAPI'.
+        nBoot (int, optional): Number of bootstrap iterations. Defaults to 1000.
+        illumiCorrection (bool, optional): Whether illumination correction was used. Defaults to True.
+        sampleSpecific (bool, optional): Whether to generate sample-specific plots. Defaults to True.
+        colorsTrain (Dict[str, str], optional): Colors for training samples. Defaults to a predefined dict.
+        colorsTrainAll (Dict[str, str], optional): Colors for all training groups. Defaults to a predefined dict.
+        colorsTest (Dict[str, str], optional): Colors for test samples. Defaults to a predefined dict.
+        colorsTestAll (Dict[str, str], optional): Colors for all test groups. Defaults to a predefined dict.
+    """
     #Initialization=======================
     parameter=paramerge(paramPath='../Data/Results/Parameters', projects=[project.split('iC_')[-1] for project in projects])
-    loadPaths0=loadPathGenerator(loadPath='../Data/Results', 
-                                projects=projects, 
-                                loadFolder='s2_o4_3Dinterp_exfeatures')
-    loadPath='../Data/Results/'+'_'.join(projects)+'/s2_o5_randboot_EpiAge_lsvm'
-    savePath='../Data/Results/'+'_'.join(projects)+'/fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP'
+    loadPath=f'../Data/Results/{"_".join(projects)}/o4_ImAge_validation'
+    savePath=f'../Data/Results/{"_".join(projects)}/fig_o4_ImAge_validation_VIOLIN'
+    
     os.makedirs(savePath, exist_ok=True)
-    trainRatio=0.8
-        
     saveNameAdd=''
     if segCh!='DAPI':
-        saveNameAdd='seg_'+segCh
+        saveNameAdd=f'seg_{segCh}'
     if illumiCorrection==False:
-        saveNameAdd='noIC_'+saveNameAdd
-        
+        saveNameAdd=f'noIC_{saveNameAdd}'
+    
+    statPara= 'TAS'
     #reorder them by alphabetical order
     contents.sort()
     groups.sort()
     labels.sort()
     #======================================
-    loadFileNamesW=saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_nBoot'+str(nBoot)+'_seed*_'+'_'.join(groups)+'_'+'_'.join(labels)+'.pickle'
-    loadFileNames=dir_rmv_file(loadPath,loadFileNamesW)
+    
+    loadFileNamesW=f'{saveNameAdd}_{statPara}_{"_".join(contents)}_meanS{meanSize}_nBoot{nBoot}_SEEDNUM_{"_".join(groups)}_{"_".join(labels)}.pickle'
+    loadFileNames=dir_rmv_file(loadPath,loadFileNamesW.replace('SEEDNUM','*'))
 
     accList=[]
     allPredList=[]
@@ -115,7 +152,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
     allTrainBinList=[]
     allParamsList=[]
     for i in loadFileNames:
-        res=ezload(loadPath+'/'+i)
+        res=ezload(f'{loadPath}/{i}')
         trainProj=res['trainProj']
         trainLabelList=res['trainLabelList']
         trainSampleList=res['trainSampleList']
@@ -199,7 +236,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                         plot_bgcolor='rgba(0,0,0,0)')
     fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
     # fig.show()
-    saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_acc.html'
+    saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_acc.html"
     fig.write_html(saveFileName)
     
     #visiuallize the prediciton probability with violin plot    
@@ -209,9 +246,6 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
     allParamsList=np.concatenate(allParamsList)
     plotData=pd.DataFrame({'pred':allPredList,'label':allLabelList,'group':'Test','sample':allParamsList})
     plotData['group'].iloc[allTrainBinList]='Training'
-    #save CSV file 
-    saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_pred.csv'
-    plotData.to_csv(saveFileName, index=False)
     
     plotData['pred']=imreqant(plotData['pred'],
                               plotData['pred'].min(),
@@ -247,7 +281,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
         fig.update_layout(layout)
         # fig.show()
         #save the plot
-        saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_pred_persample_training.html'
+        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_training.html"
         fig.write_html(saveFileName)
         
         #train all
@@ -292,7 +326,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                 )
         fig.update_layout(layout)
         # fig.show()
-        saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_pred_persample_mean_training_scatter.html'
+        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_mean_training_scatter.html"
         fig.write_html(saveFileName)
         
 #=======#test==============================
@@ -342,7 +376,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
         fig.update_layout(layout)
         # fig.show()
         #save the plot
-        saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_pred_persample_test.html'
+        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_test.html"
         fig.write_html(saveFileName)  
         
         #obtain the p value for each sample
@@ -363,8 +397,8 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                 #     pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref],tmpPlotData['pred'].loc[tmpPlotData['sample']==com])[1]
 
         #save the p value matrix
-        pValMat.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_pred_persample_pValMat.csv')
-        valVec.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_pred_persample_valVec.csv')
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_pred_persample_pValMat.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_pred_persample_valVec.csv")
              
         #test all
         leyLists=list(colorsTestAll.keys())
@@ -434,7 +468,7 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                             ))
             count+=1
         # fig.show()
-        saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_pred_persample_mean_test_scatter_dist.html'
+        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_mean_test_scatter_dist.html"
         fig.write_html(saveFileName)
         
         
@@ -456,8 +490,8 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                 # else:
                 #     pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['label']==ref],tmpPlotData['pred'].loc[tmpPlotData['label']==com])[1]
         #save the p value matrix
-        pValMat.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_means_pValMat_mean.csv')
-        valVec.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_means_valVec_mean.csv')
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_pValMat_mean.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_valVec_mean.csv")
         
         #obtain the p value for each sample about the variance
         pValMat=np.zeros((len(leyLists),len(leyLists)))
@@ -476,38 +510,21 @@ def fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP(projects=['longiBLOOD'],
                 # else:
                 #     pValMat.loc[ref,com]=stats.levene(tmpPlotData['pred'].loc[tmpPlotData['label']==ref],tmpPlotData['pred'].loc[tmpPlotData['label']==com])[1]
         #save the p value matrix
-        pValMat.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_means_pValMat_var.csv')
-        valVec.to_csv(savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_means_valVec_var.csv')
-        
-
-                
-            
-
-             
-        # #swarm plot for each sample from seaborn
-        # leyLists=list(colorsTestAll.keys())
-        # 
-        # for label in leyLists:
-        #     #create figure and set the font to be Arial
-        #     fig, ax = plt.subplots(figsize=(15, 10))
-        #     ax=sns.swarmplot(x="sample", y="pred", 
-        #                     data=tmpPlotData.loc[tmpPlotData['label']==label],
-        #                     palette=colorsTest,
-        #                     size=5*(max(meanSize,5)/20),)
-        #     ax.set_xlabel('Sample',fontsize=20)
-        #     ax.set_ylabel('Prediction of aging progresson',fontsize=20)
-        #     ax.tick_params(axis='both', which='major', labelsize=20)
-        #     ax.set_ylim([0,1])
-            
-        #     #save plot
-        #     saveFileName=savePath+'/'+saveNameAdd+'_'.join(sorted(statParas))+'_'+'_'.join(contents)+'_'+'binS'+str(binS)+'_meanS'+str(meanSize)+'_'+'_'.join(groups)+'_treated_swarm_'+label+'.png'
-        #     plt.savefig(saveFileName, bbox_inches='tight')
-        #     # plt.show()
-        #     plt.close()
-        
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_pValMat_var.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_valVec_var.csv")        
         
 #f-test function
-def f_test(x,y):
+def f_test(x: np.ndarray, y: np.ndarray) -> float:
+    """
+    Performs an F-test to compare the variances of two arrays.
+
+    Args:
+        x (np.ndarray): First array of data.
+        y (np.ndarray): Second array of data.
+
+    Returns:
+        float: The p-value of the F-test.
+    """
     x=np.array(x)
     y=np.array(y)
     xVar=x.var()
