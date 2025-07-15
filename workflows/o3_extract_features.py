@@ -1,10 +1,14 @@
 '''
-Description s2_o4_3Dinterp_exfeatures.py
-========================================
-series 2 (s2): analysis of the 2D/3D plate images (for intestinal STEM cell and longitudinal blood samples)
-apply 3D image interpolation and extract features
-========================================
-Kenta Ninomiya @ Sanford Burnham Prebys Medical Discovery Institute: 2022/11/07
+This script extracts texture and shape (TAS) features from 3D segmented cell images.
+It follows the segmentation step (o2_segmentation) and processes the saved cell crops.
+
+The main workflow is as follows:
+1.  It locates the saved segmented cell data from the previous step.
+2.  For each data file (representing a field of view), it loads the dictionary of cropped cell images.
+3.  For each individual cell within the file, it extracts features from different channels specified in the 'contents' list.
+4.  The feature extraction is based on the `extract_MIELv023_tas_features` function, which calculates a set of TAS features.
+5.  The extracted features for all cells in a file are compiled into a DataFrame and saved to a new file.
+6.  The process is parallelized using multiprocessing to handle multiple image files concurrently.
 '''
 
 #import modules=======================
@@ -31,17 +35,35 @@ from subfunctions.interp3d import lin3dinterp, shapelin3dinterp
 from subfunctions.ELTA_functions import extract_MIELv023_tas_features
 #=====================================
 
-def o3_extract_features(project='longiBLOOD',
-                        resultsSavePath='../Data/Results',
-                        contents=[
+def o3_extract_features(project: str = 'longiBLOOD',
+                        resultsSavePath: str = '../Data/Results',
+                        contents: list = [
                                         'DAPI',
                                         'H3K4me1',
                                         'H3K27ac',
                                         ],
-                        segCh='DAPI',
-                        illumiCorrection=True,
-                        nWorkers=1,
+                        segCh: str = 'DAPI',
+                        illumiCorrection: bool = True,
+                        nWorkers: int = 1,
                         ):
+    """
+    Extracts features from segmented 3D cell images.
+
+    This function orchestrates the feature extraction process. It finds the
+    segmented cell data, and for each cell, it computes a set of features
+    (e.g., TAS features) for the specified channels.
+
+    Args:
+        project (str, optional): The name of the project. Defaults to 'longiBLOOD'.
+        resultsSavePath (str, optional): Path to save the results. Defaults to '../Data/Results'.
+        contents (list, optional): List of channel names to extract features from.
+                                      Defaults to ['DAPI', 'H3K4me1', 'H3K27ac'].
+        segCh (str, optional): The channel used for segmentation, used to construct file names.
+                               Defaults to 'DAPI'.
+        illumiCorrection (bool, optional): Whether illumination correction was used, for file naming.
+                                           Defaults to True.
+        nWorkers (int, optional): Number of parallel workers. Defaults to 1.
+    """
     # time.sleep(random.random())
     #Initialization=======================
     loadPath=f'{resultsSavePath}/{project}/o2_segmentation'
@@ -81,8 +103,25 @@ def o3_extract_features(project='longiBLOOD',
 
 
 # Run processing in parallel using threads
-def _process_image(index, tmpImg, savePath, saveNameAdd, statPara, contents, loadPath):
+def _process_image(index: int, tmpImg: str, savePath: str, saveNameAdd: str, statPara: str, contents: list, loadPath: str):
+    """
+    Worker function to process a single image file from segmentation.
 
+    This function loads a pickle file containing cropped cell images,
+    extracts features for each cell, and saves the features to a new file.
+
+    Args:
+        index (int): The job index for progress tracking.
+        tmpImg (str): The filename of the segmented image data to process.
+        savePath (str): The directory to save the feature files.
+        saveNameAdd (str): A prefix for the save file name based on settings.
+        statPara (str): The type of statistics to compute (e.g., 'TAS').
+        contents (list): A list of channel names to extract features from.
+        loadPath (str): The directory where the segmented data is stored.
+
+    Returns:
+        dict: A dictionary with the job index and an error message if applicable.
+    """
     # Check the existence of results (if exists, calculation is skipped)
     saveFileName = f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_{tmpImg}'
     idxFileName = f'{savePath}/.{saveNameAdd}_{statPara}_{"_".join(contents)}_{tmpImg}'
@@ -118,7 +157,18 @@ def _process_image(index, tmpImg, savePath, saveNameAdd, statPara, contents, loa
         idxremover(idxFileName)
     return {'index': index}
         
-def ELTAS(tmpFile,mask,keyList):
+def ELTAS(tmpFile: dict, mask: np.ndarray, keyList: list):
+    """
+    Computes TAS (Texture and Shape) features for a single cell across multiple channels.
+
+    Args:
+        tmpFile (dict): A dictionary where keys are channel names and values are the corresponding 3D image arrays for a single cell.
+        mask (np.ndarray): The 3D binary mask for the cell.
+        keyList (list): A list of channel names (keys in tmpFile) to process.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the concatenated features from all specified channels for the cell.
+    """
     allFeats=[]
     for key in keyList:
         tmpImg=tmpFile[key]

@@ -1,7 +1,17 @@
 '''
-Description o2_segmentation.py
-========================================
-========================================
+This script performs 3D segmentation of cells from microscopy images using the StarDist model.
+It processes images from a specified project, applies illumination correction if enabled,
+and segments cells in a designated channel (e.g., DAPI).
+
+The workflow is as follows:
+1.  It identifies image files for a given project and extracts metadata from filenames.
+2.  For each unique field of view, column, and row combination, it loads the corresponding z-stack.
+3.  If illumination correction is enabled, it applies the pre-computed correction models.
+4.  The image is pre-processed (resampling, normalization, sharpening) to be suitable for StarDist.
+5.  The StarDist 3D model is used to predict and segment individual cell instances.
+6.  For each segmented cell, it crops out the cell region from all channels, creating a small 3D image of each cell.
+7.  The cropped cell images and their coordinates are saved to a file.
+8.  The process is parallelized to handle multiple image sets concurrently.
 '''
 
 #import modules=======================
@@ -37,21 +47,41 @@ from subfunctions.crop3d import crop3d
 #=====================================
 time.sleep(random.random())
 
-def o2_segmentation(project='longiBLOOD',
-                           orgDataLoadPath='../Data/Original',
-                           orgDataSubFolder='Images',
-                           resultsSavePath='../Data/Results',
-                           imageFileRegEx='',
-                           imageFileFormat='.tiff',
-                           imageIndex={'ch1':'Channel1PrimaryAntibody',
+def o2_segmentation(project: str = 'longiBLOOD',
+                           orgDataLoadPath: str = '../Data/Original',
+                           orgDataSubFolder: str = 'Images',
+                           resultsSavePath: str = '../Data/Results',
+                           imageFileRegEx: str = '',
+                           imageFileFormat: str = '.tiff',
+                           imageIndex: dict = {'ch1':'Channel1PrimaryAntibody',
                                        'ch2':'Channel2PrimaryAntibody',
                                        'ch3':'Channel3PrimaryAntibody',
                                        'ch4':'Channel4PrimaryAntibody'},
-                           segCh='DAPI',
-                           illumiCorrection=False,
-                           nWorkers=4,
-                           voxelDim=[1,0.5,0.5]  # [z, y, x] in micrometers
+                           segCh: str = 'DAPI',
+                           illumiCorrection: bool = False,
+                           nWorkers: int = 4,
+                           voxelDim: list = [1,0.5,0.5]  # [z, y, x] in micrometers
                            ):
+    """
+    Performs 3D segmentation of cells in microscopy images.
+
+    This function orchestrates the segmentation workflow, including loading data,
+    applying illumination correction, running the StarDist model, and saving
+    the results. It processes images in parallel for efficiency.
+
+    Args:
+        project (str, optional): The name of the project. Defaults to 'longiBLOOD'.
+        orgDataLoadPath (str, optional): Path to the original data. Defaults to '../Data/Original'.
+        orgDataSubFolder (str, optional): Subfolder containing images. Defaults to 'Images'.
+        resultsSavePath (str, optional): Path to save results. Defaults to '../Data/Results'.
+        imageFileRegEx (str, optional): Regex for image metadata extraction. Defaults to ''.
+        imageFileFormat (str, optional): Image file format. Defaults to '.tiff'.
+        imageIndex (dict, optional): Mapping of channel numbers to antibody names.
+        segCh (str, optional): The channel name to be used for segmentation. Defaults to 'DAPI'.
+        illumiCorrection (bool, optional): Whether to apply illumination correction. Defaults to False.
+        nWorkers (int, optional): Number of parallel workers. Defaults to 4.
+        voxelDim (list, optional): Voxel dimensions [z, y, x] in micrometers. Defaults to [1,0.5,0.5].
+    """
     #Initialization=======================
     parameterPath=f'{resultsSavePath}/platemap/{project}.csv'
     parameters=pd.read_csv(parameterPath, dtype=str)
@@ -121,14 +151,38 @@ def o2_segmentation(project='longiBLOOD',
     display.finish()
 
 
-def projectindexer(name):
+def projectindexer(name: str):
+    """
+    Extracts the project name from a folder name.
+
+    The project name is expected to be enclosed in square brackets, e.g., 'folder[project]'.
+
+    Args:
+        name (str): The folder name.
+
+    Returns:
+        str or None: The extracted project name, or None if not found.
+    """
     try:
         return(name.split('[')[1].split(']')[0])
     except:
         return()
     
 
-def _process_combo(args):
+def _process_combo(args: tuple):
+    """
+    Worker function to process a single image set (field/column/row combination).
+
+    This function performs the core segmentation task for a single z-stack, including
+    loading images, applying correction, running StarDist, and saving cropped cell images.
+
+    Args:
+        args (tuple): A tuple containing all necessary parameters for processing one combination,
+                      such as file paths, metadata, models, and settings.
+    
+    Returns:
+        dict: A dictionary with the job index and an error message if applicable.
+    """
     (
      i, imageIndex,
      fn, cn, rn, parameters, segCh, savePath, saveNameAdd, 

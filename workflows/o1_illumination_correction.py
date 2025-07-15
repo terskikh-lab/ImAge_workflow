@@ -1,9 +1,19 @@
 '''
-Description o1_illumination_correction
-========================================
+This script performs illumination correction on a set of images using the BaSiC
+(Background and Shading Correction) method. It is designed to work with a specific
+project data structure, where images are organized by project, channel, field of view, etc.
 
+The main steps are:
+1. Identify image files for a specified project.
+2. Extract metadata (like channel, field, etc.) from filenames.
+3. For each unique channel and field of view combination, it collects all
+   corresponding images.
+4. It then uses the BaSiC algorithm to compute an illumination correction model
+   (flatfield and darkfield) from these images.
+5. The computed models are saved to disk for later use.
 
-========================================
+The script supports parallel processing to speed up the computation for different
+channel/field combinations.
 '''
 
 #import modules=======================
@@ -31,14 +41,29 @@ from subfunctions.idxremover import idxremover
 from subfunctions.ezsave import ezsave
 
 #=====================================
-def o1_illumination_correction(project='longiBLOOD',
-                orgDataLoadPath='../Data/Original',
-                orgDataSubFolder='Images',
-                resultsSavePath='../Data/Results',
-                imageFileRegEx='',
-                imageFileFormat='.tiff',
-                nWorkers=4
+def o1_illumination_correction(project: str = 'longiBLOOD',
+                orgDataLoadPath: str = '../Data/Original',
+                orgDataSubFolder: str = 'Images',
+                resultsSavePath: str = '../Data/Results',
+                imageFileRegEx: str = '',
+                imageFileFormat: str = '.tiff',
+                nWorkers: int = 4
                 ):
+    """
+    Performs illumination correction on images.
+
+    This function reads images from a specified project folder, corrects for uneven
+    illumination using the BaSiC algorithm, and saves the correction model.
+
+    Args:
+        project (str, optional): The name of the project. Defaults to 'longiBLOOD'.
+        orgDataLoadPath (str, optional): The path to the original data. Defaults to '../Data/Original'.
+        orgDataSubFolder (str, optional): The subfolder containing the images. Defaults to 'Images'.
+        resultsSavePath (str, optional): The path to save the results. Defaults to '../Data/Results'.
+        imageFileRegEx (str, optional): The regular expression to extract metadata from image filenames. Defaults to ''.
+        imageFileFormat (str, optional): The file format of the images. Defaults to '.tiff'.
+        nWorkers (int, optional): The number of worker threads to use for parallel processing. Defaults to 4.
+    """
     #Initialization=======================
     loadPath=orgDataLoadPath
     savePath=f'{resultsSavePath}/{project}/o1_illumination_correction'
@@ -84,13 +109,42 @@ def o1_illumination_correction(project='longiBLOOD',
 
     display.finish()
 
-def projectindexer(name):
+def projectindexer(name: str):
+    """
+    Extracts the project name from a folder name.
+
+    The project name is expected to be enclosed in square brackets, e.g., 'folder[project]'.
+
+    Args:
+        name (str): The folder name.
+
+    Returns:
+        str or None: The extracted project name, or None if not found.
+    """
     try:
         return(name.split('[')[1].split(']')[0])
     except:
         return()
 
-def _process_ch_fn_combo(args):
+def _process_ch_fn_combo(args: tuple):
+    """
+    Processes a combination of channel and field for illumination correction.
+
+    This is a worker function for parallel processing. It fits a BaSiC model
+    for a given channel and field combination and saves the model.
+
+    Args:
+        args (tuple): A tuple containing the following arguments:
+            index (int): The job index.
+            ch: The channel to process.
+            fn: The field to process.
+            savePath (str): The path to save the correction model.
+            imgPath (str): The path to the images.
+            rcfpIdx (pd.DataFrame): A DataFrame with image metadata.
+    
+    Returns:
+        dict: A dictionary with the job index and an error message if applicable.
+    """
     import os
     import tifffile as tiff
     import numpy as np

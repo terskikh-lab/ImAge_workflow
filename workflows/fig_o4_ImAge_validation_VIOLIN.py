@@ -1,5 +1,5 @@
 '''
-Description fig_s2_o5_randboot_EpiAge_lsvm_VIOLIN_TTCOMP.py
+Description fig_o4_ImAge_validation_VIOLIN.py
 ========================================
 visualize the result of s2_o5_randommean_LR_labels.py with violin plot
 ========================================
@@ -17,17 +17,11 @@ import plotly.graph_objects as go
 import scipy.stats as stats
 
 #import self defined functions========
-from Functions.paramerge import *
-from Functions.loadPathGenerator import *
-from Functions.dir_rmv_folder import *
-from Functions.dir_rmv_file import *
-from Functions.glaylconvert import *
-from Functions.dbgimshow import *
-from Functions.progressregister import *
-from Functions.idxremover import *
-from Functions.imreqant import *
-from Functions.ezsave import *
-from Functions.ezload import *
+from subfunctions.paramerge import paramerge
+from subfunctions.loadPathGenerator import loadPathGenerator
+from subfunctions.dir_rmv_file import dir_rmv_file
+from subfunctions.imreqant import imreqant
+from subfunctions.ezload import ezload
 #=====================================
 
 
