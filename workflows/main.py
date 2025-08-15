@@ -49,9 +49,9 @@ chs=['DAPI',
      'H3K27ac',
     #  'H3K9ac'
      ] #list of channels to be analyzed. These channels will be used to extract imaging features
-imageIndex={'ch1':'Channel1PrimaryAntibody',
-            'ch2':'Channel2PrimaryAntibody',
-            'ch3':'Channel3PrimaryAntibody'}
+imageIndex={'ch1':'Channel1',
+            'ch2':'Channel2',
+            'ch3':'Channel3'}
 # orgDataLoadPath='../Data/Original'
 orgDataLoadPath='/mnt/m/imaging_data/old_ImAge_publication'
 orgDataSubFolder='Images'
