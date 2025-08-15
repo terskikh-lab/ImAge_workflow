@@ -117,7 +117,11 @@ o3_extract_features(project=p,
                     illumiCorrection=illumiCorrection,
                     nWorkers=50)
         
-    
+
+#%% ========================================================================================
+'''
+ImAge axis construction and prediction with validation
+'''
     
 from o4_ImAge_validation import o4_ImAge_validation
 import random
