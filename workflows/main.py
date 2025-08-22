@@ -60,7 +60,9 @@ resultsSavePath='Data/Results'
 imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
+segmentation_ch='DAPI'
 illumiCorrection=False #whether to run illumination correction or not
+voxel_dim=[1,0.6,0.6] #z, x, y
 
 #%% ========================================================================================
 '''
@@ -96,14 +98,14 @@ o2_segmentation(project=p,
                 orgDataLoadPath=orgDataLoadPath,
                 orgDataSubFolder=orgDataSubFolder,
                 resultsSavePath=resultsSavePath,
-                           imageFileRegEx=imageFileRegEx,
-                           imageFileFormat=imageFileFormat,
-                           imageIndex=imageIndex,
-                           segCh='DAPI',
-                           illumiCorrection=illumiCorrection,
-                           nWorkers=3,
-                           voxelDim=[1,0.6,0.6],
-                           )
+                imageFileRegEx=imageFileRegEx,
+                imageFileFormat=imageFileFormat,
+                imageIndex=imageIndex,
+                segCh=segmentation_ch,
+                illumiCorrection=illumiCorrection,
+                nWorkers=3,
+                voxelDim=voxel_dim,
+                )
 
 
 #%% ========================================================================================
@@ -114,6 +116,7 @@ from o3_extract_features import o3_extract_features
 o3_extract_features(project=p,
                     resultsSavePath=resultsSavePath,
                     contents=chs,
+                    segCh=segmentation_ch,
                     illumiCorrection=illumiCorrection,
                     nWorkers=50)
         
@@ -132,10 +135,10 @@ for i in range(100):
             
 for meanSize in [10]:
     o4_ImAge_validation(projects=[p],
+                        segCh=segmentation_ch,
                         illumiCorrection=True,
                         contents=chs,
                         seeds=rndVals,
                         meanSize=meanSize,
                         nBoot=1000,
-                        sampleGroups=['Passage'],
                         )
