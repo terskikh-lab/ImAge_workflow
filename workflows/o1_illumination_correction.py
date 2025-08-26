@@ -1,23 +1,22 @@
 """
-This script performs illumination correction on a set of images using the BaSiC
-(Background and Shading Correction) method. It is designed to work with a specific
-project data structure, where images are organized by project, channel, field of view, etc.
+Illumination correction with BaSiC
 
-The main steps are:
-1. Identify image files for a specified project.
-2. Extract metadata (like channel, field, etc.) from filenames.
-3. For each unique channel and field of view combination, it collects all
-   corresponding images.
-4. It then uses the BaSiC algorithm to compute an illumination correction model
-   (flatfield and darkfield) from these images.
-5. The computed models are saved to disk for later use.
+This module estimates flat-field and dark-field models using BaSiC
+for each channel/field-of-view and saves them for downstream use.
 
-The script supports parallel processing to speed up the computation for different
-channel/field combinations.
+Pipeline summary:
+    1) Discover project images and parse metadata from filenames.
+    2) Group images by channel and field of view.
+    3) Fit BaSiC to derive flat/dark fields per group.
+    4) Persist the models to disk.
+
+Notes:
+    - Processing can be parallelized across channel/field jobs.
+    - Expects a structured dataset with consistent filename patterns.
 
 Author:
     Kenta Ninomiya
-    Harry Perkins Institute of Medical Research/ the Univeristy of Western Australia
+    Harry Perkins Institute of Medical Research / The University of Western Australia
     Date: 2025/07/15
 """
 

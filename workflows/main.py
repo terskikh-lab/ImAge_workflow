@@ -1,41 +1,48 @@
 """
-Main workflow script for the ImAge analysis pipeline.
+ImAge workflow runner
 
-Description:
-    This script orchestrates the entire ImAge analysis workflow, from raw image
-    processing to feature extraction and validation. It is configured via a set
-    of variables at the beginning of the file, allowing users to specify project
-    names, data paths, and analysis parameters.
+Overview:
+    Orchestrates illumination correction (optional), nuclei segmentation,
+    feature extraction, and ImAge axis validation. Configure the variables in
+    the "configuration" block below.
 
-    The workflow consists of the following main steps:
-    1.  **Illumination Correction (Optional):** Corrects for non-uniform
-        illumination in the images. This step is controlled by the
-        `illumiCorrection` flag.
-    2.  **Segmentation:** Segments nuclei in the images based on a specified
-        channel (e.g., DAPI).
-    3.  **Feature Extraction:** Extracts various imaging features from the
-        segmented nuclei across all specified channels.
-    4.  **ImAge Validation:** Performs validation of the ImAge model by training
-        and testing on the extracted features.
+Inputs and paths:
+    - orgDataLoadPath (str): Absolute or workspace-relative path to the dataset root.
+    - orgDataSubFolder (str): Subfolder that contains images (default: 'Images').
+    - resultsSavePath (str): Output root for pipeline results (default: 'Data/Results').
+    - imageFileRegEx (re.Pattern): Regex for parsing image filenames (e.g.,
+      matching 'r01c11f01p01-ch1sk1fk1fl1.tiff').
+    - imageFileFormat (str): Image extension (e.g., '.tiff').
 
-Configuration:
-    - `p` (str): Project name. Used for organizing results.
-    - `chs` (List[str]): List of channels to be analyzed.
-    - `imageIndex` (Dict[str, str]): Mapping of channel numbers to antibody names.
-    - `orgDataLoadPath` (str): Path to the original imaging data.
-    - `orgDataSubFolder` (str): Subfolder within the data path containing images.
-    - `resultsSavePath` (str): Path where analysis results will be saved.
-    - `imageFileRegEx` (re.Pattern): Regular expression to parse image filenames.
-    - `imageFileFormat` (str): File format of the images (e.g., '.tiff').
-    - `illumiCorrection` (bool): Flag to enable or disable illumination correction.
+Project settings:
+    - p (str): Project name used for organizing outputs.
+    - chs (List[str]): Channels to analyze for feature extraction (e.g., ['DAPI', 'H3K27me3']).
+    - imageIndex (Dict[str, str]): Map from 'chN' to a human-readable channel name.
+    - segmentation_ch (str): Channel used for nuclei segmentation (default: 'DAPI').
+    - illumiCorrection (bool): Whether to run illumination correction (default: False).
+    - voxel_dim (List[float]): [z, x, y] voxel sizes (µm).
 
-Usage:
-    Configure the variables at the top of the script and then run it from the
-    command line. A GPU can be specified as a command-line argument for the
-    segmentation step.
-    
-    Example:
-        python main.py 0  # Runs segmentation on GPU 0
+CLI usage:
+    Run the script from the repository root with an optional GPU index for the
+    segmentation step. If omitted, CPU or the default GPU is used.
+
+        python workflows/main.py          # CPU/default GPU
+        python workflows/main.py 0        # use GPU 0
+
+Pipeline stages:
+    1) Illumination correction (optional):
+       Builds per-channel flat-field/dark-field and corrects images when
+       `illumiCorrection` is True.
+    2) Segmentation:
+       Detects nuclei on `segmentation_ch` and writes masks/labels.
+    3) Feature extraction:
+       Computes per-nucleus features for channels in `chs`.
+    4) ImAge validation:
+       Constructs the ImAge axis and evaluates via bootstrapped validation.
+
+Notes:
+    - Seeds for bootstrap are deterministically generated for reproducibility.
+    - Tune nWorkers values per step based on your machine to avoid oversubscription.
 """
 #exeP_Reprogramming.py
 import re
@@ -52,11 +59,10 @@ chs=['DAPI',
 imageIndex={'ch1':'Channel1',
             'ch2':'Channel2',
             'ch3':'Channel3'}
-# orgDataLoadPath='../Data/Original'
-orgDataLoadPath='/mnt/m/imaging_data/old_ImAge_publication'
+orgDataLoadPath='../Data/Original'
 orgDataSubFolder='Images'
 resultsSavePath='Data/Results'
-# r01c11f01p01-ch1sk1fk1fl1.tiff
+# r01c01f01p01-ch1sk1fk1fl1.tiff
 imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
@@ -74,7 +80,7 @@ if illumiCorrection:
     o1_illumination_correction(project=p,
                                orgDataLoadPath=orgDataLoadPath,
                                orgDataSubFolder=orgDataSubFolder,
-                               resultsSavePath='Data/Results',
+                               resultsSavePath=resultsSavePath,
                                imageFileRegEx=imageFileRegEx,
                                imageFileFormat=imageFileFormat,
                                nWorkers=10
@@ -136,7 +142,7 @@ for i in range(100):
 for meanSize in [10]:
     o4_ImAge_validation(projects=[p],
                         segCh=segmentation_ch,
-                        illumiCorrection=True,
+                        illumiCorrection=illumiCorrection,
                         contents=chs,
                         seeds=rndVals,
                         meanSize=meanSize,
