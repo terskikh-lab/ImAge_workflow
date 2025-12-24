@@ -56,14 +56,14 @@ chs=['DAPI',
      'H3K27ac',
     #  'H3K9ac'
      ] #list of channels to be analyzed. These channels will be used to extract imaging features
-imageIndex={'ch1':'Channel1',
-            'ch2':'Channel2',
-            'ch3':'Channel3'}
+imageIndex={'1':'Channel1',
+            '2':'Channel2',
+            '3':'Channel3'}
 orgDataLoadPath='../Data/Original'
 orgDataSubFolder='Images'
 resultsSavePath='Data/Results'
 # r01c01f01p01-ch1sk1fk1fl1.tiff
-imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
+imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-ch(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
 segmentation_ch='DAPI'
