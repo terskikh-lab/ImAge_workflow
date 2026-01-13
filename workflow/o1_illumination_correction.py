@@ -95,7 +95,7 @@ def o1_illumination_correction(imageFileRegEx: re.Pattern,
     ch_fn_combos = rcfpIdx[['channel', 'field']].drop_duplicates()
     
     jobs = [f"channel{row['channel']}_field{row['field']}" for _, row in ch_fn_combos.iterrows()]
-    display = ProgressDisplay(jobs, nWorkers)
+    display = ProgressDisplay(jobs, nWorkers, log_dir=savePath, cleanup_globs=[".*.pickle"])
 
     args_list = [
         (i, row['channel'], row['field'], savePath, imgPath, rcfpIdx)

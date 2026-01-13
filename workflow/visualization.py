@@ -10,11 +10,10 @@ chs=['DAPI',
      'H3K27ac',
     #  'H3K9ac'
      ] #list of channels to be analyzed. These channels will be used to extract imaging features
-imageIndex={'ch1':'Channel1PrimaryAntibody',
-            'ch2':'Channel2PrimaryAntibody',
-            'ch3':'Channel3PrimaryAntibody'}
-# orgDataLoadPath='../Data/Original'
-orgDataLoadPath='/mnt/m/imaging_data/old_ImAge_publication'
+imageIndex={'ch1':'Channel1',
+            'ch2':'Channel2',
+            'ch3':'Channel3'}
+orgDataLoadPath='Data/Original'
 orgDataSubFolder='Images'
 resultsSavePath='Data/Results'
 # r01c11f01p01-ch1sk1fk1fl1.tiff
@@ -30,51 +29,52 @@ visualization
 from fig_o4_ImAge_validation_VIOLIN import fig_o4_ImAge_validation_VIOLIN
 for meanSize in [10]:
     fig_o4_ImAge_validation_VIOLIN(projects=[p],
+                                resultsSavePath=resultsSavePath,
                                 contents=chs,
                                 meanSize=meanSize,
                                 groups=[
-                                    'ExperimentalCondition',
+                                    'condition',
                                 ],
                                 labels=['young', 'old'],
                                 segCh='DAPI',
                                 nBoot=1000,
-                                illumiCorrection=True,
+                                illumiCorrection=illumiCorrection,
                                 sampleSpecific=True,
                                 colorsTrain={  # young
-                                            'mouse1':'#20fc08',
-                                            'mouse2':'#13ad02',
-                                            'mouse3':'#45f731',
-                                            'mouse4':'#299e1c',
-                                            'mouse5':'#60f250',
+                                            'Mouse1':'#20fc08',
+                                            'Mouse2':'#13ad02',
+                                            'Mouse3':'#45f731',
+                                            'Mouse4':'#299e1c',
+                                            'Mouse5':'#60f250',
+                                            'Mouse559':'#82f774',
                                             #old
-                                            'mouse11':'#99360c',
-                                            'mouse12':'#752a0b',
-                                            'mouse13':'#9e4520',
-                                            'mouse14':'#c74914',
-                                            'mouse15':'#9e4c29',
+                                            'Mouse15':'#99360c',
+                                            'Mouse17':'#752a0b',
+                                            'Mouse18':'#9e4520',
+                                            'Mouse19':'#c74914',
                                             },
                                 colorsTrainAll={  # young
                                                 'young':'#20fc08',
                                                 'old':'#99360c',
                                                 },
                                 colorsTest={  # young
-                                            'mouse1':'#20fc08',
-                                            'mouse2':'#13ad02',
-                                            'mouse3':'#45f731',
-                                            'mouse4':'#299e1c',
-                                            'mouse5':'#60f250',
-                                            #old treated
-                                            'mouse6':'#d9a600',
-                                            'mouse7':'#a68003',
-                                            'mouse8':'#ffca1c',
-                                            'mouse9':'#ad8a17',
-                                            'mouse10':'#f0c435',
-                                            #old untreated
-                                            'mouse11':'#99360c',
-                                            'mouse12':'#752a0b',
-                                            'mouse13':'#9e4520',
-                                            'mouse14':'#c74914',
-                                            'mouse15':'#9e4c29',
+                                            'Mouse1':'#20fc08',
+                                            'Mouse2':'#13ad02',
+                                            'Mouse3':'#45f731',
+                                            'Mouse4':'#299e1c',
+                                            'Mouse5':'#60f250',
+                                            'Mouse559':'#82f774',
+                                            #middle age
+                                            'Mouse1638':'#d9a600',
+                                            'Mouse1639':'#a68003',
+                                            'Mouse1640':'#ffca1c',
+                                            'Mouse1647':'#ad8a17',
+                                            'Mouse1666':'#f0c435',
+                                            #old
+                                            'Mouse15':'#99360c',
+                                            'Mouse17':'#752a0b',
+                                            'Mouse18':'#9e4520',
+                                            'Mouse19':'#c74914',
                                             },
                                 colorsTestAll = {
                                             'young':'#20fc08',
@@ -90,11 +90,12 @@ ImAge readouts export
 '''
 from export_o4_ImAge_validation import export_o4_ImAge_validation
 export_o4_ImAge_validation(projects=[p],
+                            resultsSavePath=resultsSavePath,
                             contents=chs,
                             meanSize=meanSize,
-                            groups=['ExperimentalCondition'],
+                            groups=['condition'],
                             labels=['young', 'old'],
                             segCh='DAPI',
                             nBoot=1000,
-                            illumiCorrection=True
+                            illumiCorrection=illumiCorrection
                             )

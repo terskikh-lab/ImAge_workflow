@@ -92,7 +92,7 @@ def o3_extract_features(project: str = 'longiBLOOD',
     #get the field of view list
     imgList=dir_rmv_file(loadPath, f'{saveNameAdd}imgs*.pickle')
     
-    display = ProgressDisplay(imgList, nWorkers)
+    display = ProgressDisplay(imgList, nWorkers, log_dir=savePath, cleanup_globs=[".*.pickle"])
 
     args_list = [
         (i, tmpImg, savePath, saveNameAdd, statPara, contents, loadPath)
@@ -102,8 +102,9 @@ def o3_extract_features(project: str = 'longiBLOOD',
     display.start()
     # Use multiprocessing instead of ThreadPoolExecutor
     with multiprocessing.Pool(processes=nWorkers) as pool:
-        for result in pool.starmap(_process_image, args_list):
-            display.update(result)
+        # Use apply_async to make it interruptible via wait_for_pool
+        async_results = [pool.apply_async(_process_image, args) for args in args_list]
+        display.wait_for_pool(pool, async_results)
 
     display.finish()
 

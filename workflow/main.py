@@ -56,14 +56,14 @@ chs=['DAPI',
      'H3K27ac',
     #  'H3K9ac'
      ] #list of channels to be analyzed. These channels will be used to extract imaging features
-imageIndex={'1':'Channel1',
-            '2':'Channel2',
-            '3':'Channel3'}
-orgDataLoadPath='../Data/Original'
+imageIndex={'ch1':'Channel1',
+            'ch2':'Channel2',
+            'ch3':'Channel3'}
+orgDataLoadPath='Data/Original'
 orgDataSubFolder='Images'
 resultsSavePath='Data/Results'
 # r01c01f01p01-ch1sk1fk1fl1.tiff
-imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-ch(?P<channel>ch\d+)sk1fk1fl1\.tiff")
+imageFileRegEx = re.compile(r"r(?P<raw>\d+)c(?P<col>\d+)f(?P<field>\d+)p(?P<zposition>\d+)-(?P<channel>ch\d+)sk1fk1fl1\.tiff")
 imageFileFormat='.tiff'
 
 segmentation_ch='DAPI'
@@ -87,31 +87,31 @@ if illumiCorrection:
                                )
 
 #%% ========================================================================================
-'''
-Segmentation
-'''
-import sys
-try:
-    gpuN=int(sys.argv[1])
-except:
-    gpuN=None
+# '''
+# Segmentation
+# '''
+# import sys
+# try:
+#     gpuN=int(sys.argv[1])
+# except:
+#     gpuN=None
     
-from subfunctions.gpuinit import gpuinit
-gpuinit(gpuN=gpuN)
+# from subfunctions.gpuinit import gpuinit
+# gpuinit(gpuN=gpuN)
 
-from o2_segmentation import o2_segmentation
-o2_segmentation(project=p,
-                orgDataLoadPath=orgDataLoadPath,
-                orgDataSubFolder=orgDataSubFolder,
-                resultsSavePath=resultsSavePath,
-                imageFileRegEx=imageFileRegEx,
-                imageFileFormat=imageFileFormat,
-                imageIndex=imageIndex,
-                segCh=segmentation_ch,
-                illumiCorrection=illumiCorrection,
-                nWorkers=3,
-                voxelDim=voxel_dim,
-                )
+# from o2_segmentation import o2_segmentation
+# o2_segmentation(project=p,
+#                 orgDataLoadPath=orgDataLoadPath,
+#                 orgDataSubFolder=orgDataSubFolder,
+#                 resultsSavePath=resultsSavePath,
+#                 imageFileRegEx=imageFileRegEx,
+#                 imageFileFormat=imageFileFormat,
+#                 imageIndex=imageIndex,
+#                 segCh=segmentation_ch,
+#                 illumiCorrection=illumiCorrection,
+#                 nWorkers=1,
+#                 voxelDim=voxel_dim,
+#                 )
 
 
 #%% ========================================================================================
@@ -141,6 +141,7 @@ for i in range(100):
             
 for meanSize in [10]:
     o4_ImAge_validation(projects=[p],
+                        resultsSavePath=resultsSavePath,
                         segCh=segmentation_ch,
                         illumiCorrection=illumiCorrection,
                         contents=chs,

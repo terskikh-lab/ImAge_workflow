@@ -48,6 +48,8 @@ from subfunctions.ezload import ezload
 
 
 def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
+                            resultsSavePath: str = '../Data/Results',
+                            statParas: List[str] = ['TAS'],
                             contents: List[str] = [
                                 'DAPI',
                                 'H3K4me1',
@@ -109,6 +111,7 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
 
     Args:
         projects (List[str], optional): List of project names. Defaults to ['longiBLOOD'].
+        resultsSavePath (str, optional): Path to the results directory. Defaults to '../Data/Results'.
         binS (int, optional): Bin size. Defaults to 3.
         statParas (List[str], optional): List of statistical parameters. Defaults to ['TAS'].
         contents (List[str], optional): List of content names. Defaults to ['DAPI', 'H3K4me1', 'H3K27ac'].
@@ -125,9 +128,9 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         colorsTestAll (Dict[str, str], optional): Colors for all test groups. Defaults to a predefined dict.
     """
     #Initialization=======================
-    parameter=paramerge(paramPath='../Data/Results/Parameters', projects=[project.split('iC_')[-1] for project in projects])
-    loadPath=f'../Data/Results/{"_".join(projects)}/o4_ImAge_validation'
-    savePath=f'../Data/Results/{"_".join(projects)}/fig_o4_ImAge_validation_VIOLIN'
+    parameter=paramerge(paramPath=f'{resultsSavePath}/platemap', projects=[project.split('iC_')[-1] for project in projects])
+    loadPath=f'{resultsSavePath}/{"_".join(projects)}/o4_ImAge_validation'
+    savePath=f'{resultsSavePath}/{"_".join(projects)}/fig_o4_ImAge_validation_VIOLIN'
     
     os.makedirs(savePath, exist_ok=True)
     saveNameAdd=''
@@ -236,7 +239,7 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
                         plot_bgcolor='rgba(0,0,0,0)')
     fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
     # fig.show()
-    saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_acc.html"
+    saveFileName=f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_acc.html"
     fig.write_html(saveFileName)
     
     #visiuallize the prediciton probability with violin plot    
@@ -244,7 +247,7 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
     allLabelList=np.concatenate(allLabelList)
     allTrainBinList=np.concatenate(allTrainBinList)
     allParamsList=np.concatenate(allParamsList)
-    plotData=pd.DataFrame({'pred':allPredList,'label':allLabelList,'group':'Test','sample':allParamsList})
+    plotData=pd.DataFrame({'pred':allPredList,'label':allLabelList,'group':'Test','sampleID':allParamsList})
     plotData['group'].iloc[allTrainBinList]='Training'
     
     plotData['pred']=imreqant(plotData['pred'],
@@ -264,14 +267,17 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         count=0
         meanList=[]
         labelList=[]
+        foundSamples=[]
         for sample in leyLists:
-            fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['sample']==sample], 
-                                    name=sample,
-                                    line_color=colorsTrain[sample]))
-            count+=1
-            meanList.append(tmpPlotData['pred'].loc[tmpPlotData['sample']==sample].mean())
-            labelList.append(tmpPlotData['label'].loc[tmpPlotData['sample']==sample].values[0])
-        sampleDf=pd.DataFrame({'sample':leyLists,'mean':meanList,'label':labelList})
+            if (tmpPlotData['sampleID']==sample).any():
+                fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['sampleID']==sample], 
+                                        name=sample,
+                                        line_color=colorsTrain[sample]))
+                count+=1
+                meanList.append(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==sample].mean())
+                labelList.append(tmpPlotData['label'].loc[tmpPlotData['sampleID']==sample].values[0])
+                foundSamples.append(sample)
+        sampleDf=pd.DataFrame({'sampleID':foundSamples,'mean':meanList,'label':labelList})
         fig.update_layout(paper_bgcolor='rgba(0,0,0,0)')
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
         layout = dict(xaxis = dict(title = '', showgrid=False, linewidth=3.5, linecolor='black', ticks='inside', mirror=True),
@@ -281,7 +287,7 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         fig.update_layout(layout)
         # fig.show()
         #save the plot
-        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_training.html"
+        saveFileName=f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_training.html"
         fig.write_html(saveFileName)
         
         #train all
@@ -290,20 +296,21 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         
         count=0
         for label in leyLists:
-            tmpMean=sampleDf['mean'].loc[sampleDf['sample']==label].to_list()
-            fig.add_trace(go.Box(y=tmpMean, 
-                            x=[sampleDf['label'].loc[sampleDf['sample']==label].values[0]],
-                            boxpoints='all',
-                            pointpos=np.random.uniform(-0.1,0.1),
-                            name=label,
-                            marker = dict(color = colorsTrain[label],
-                                        size=10,
-                                        line = dict(color = 'rgba(0,0,0,1)',width=2),
-                                        ),
-                            line = dict(color = 'rgba(0,0,0,0)'),
-                            fillcolor = 'rgba(0,0,0,0)'
-                            ))
-            count+=1
+            if (sampleDf['sampleID']==label).any():
+                tmpMean=sampleDf['mean'].loc[sampleDf['sampleID']==label].to_list()
+                fig.add_trace(go.Box(y=tmpMean, 
+                                x=[sampleDf['label'].loc[sampleDf['sampleID']==label].values[0]],
+                                boxpoints='all',
+                                pointpos=np.random.uniform(-0.1,0.1),
+                                name=label,
+                                marker = dict(color = colorsTrain[label],
+                                            size=10,
+                                            line = dict(color = 'rgba(0,0,0,1)',width=2),
+                                            ),
+                                line = dict(color = 'rgba(0,0,0,0)'),
+                                fillcolor = 'rgba(0,0,0,0)'
+                                ))
+                count+=1
         leyLists=list(colorsTrainAll.keys())
         
         for label in leyLists:
@@ -326,7 +333,7 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
                 )
         fig.update_layout(layout)
         # fig.show()
-        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_mean_training_scatter.html"
+        saveFileName=f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_mean_training_scatter.html"
         fig.write_html(saveFileName)
         
 #=======#test==============================
@@ -337,21 +344,24 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         count=0
         meanList=[]
         labelList=[]
+        foundSamples=[]
         for sample in leyLists:
-            #violin with box plot and small sized points for outliers
-            fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['sample']==sample], 
-                                    name=sample,
-                                    line_color='black',
-                                    fillcolor=colorsTest[sample],
-                                    opacity=0.7,                                    
-                                    box_visible=True, 
-                                    meanline_visible=True,
-                                    marker_size=2,
-                                    ))
-            count+=1
-            meanList=np.append(meanList,tmpPlotData['pred'].loc[tmpPlotData['sample']==sample].mean())
-            labelList=np.append(labelList,tmpPlotData['label'].loc[tmpPlotData['sample']==sample].values[0])
-        sampleDf=pd.DataFrame({'sample':leyLists,'mean':meanList,'label':labelList})
+            if (tmpPlotData['sampleID']==sample).any():
+                #violin with box plot and small sized points for outliers
+                fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['sampleID']==sample], 
+                                        name=sample,
+                                        line_color='black',
+                                        fillcolor=colorsTest[sample],
+                                        opacity=0.7,                                    
+                                        box_visible=True, 
+                                        meanline_visible=True,
+                                        marker_size=2,
+                                        ))
+                count+=1
+                meanList=np.append(meanList,tmpPlotData['pred'].loc[tmpPlotData['sampleID']==sample].mean())
+                labelList=np.append(labelList,tmpPlotData['label'].loc[tmpPlotData['sampleID']==sample].values[0])
+                foundSamples.append(sample)
+        sampleDf=pd.DataFrame({'sampleID':foundSamples,'mean':meanList,'label':labelList})
         fig.update_layout(paper_bgcolor='rgba(0,0,0,0)')
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
         layout = dict(xaxis = dict(title = '', 
@@ -376,29 +386,30 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         fig.update_layout(layout)
         # fig.show()
         #save the plot
-        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_test.html"
+        saveFileName=f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_test.html"
         fig.write_html(saveFileName)  
         
         #obtain the p value for each sample
+        leyLists=sampleDf['sampleID'].unique()
         pValMat=np.zeros((len(leyLists),len(leyLists)))
         pValMat=pd.DataFrame(pValMat,index=leyLists,columns=leyLists)
         valVec=np.zeros((len(leyLists)))
         valVec=pd.DataFrame(valVec,index=leyLists,columns=['val'])
         for ref in leyLists:
-            valVec['val'].loc[ref]=np.median(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref])
+            valVec['val'].loc[ref]=np.median(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==ref])
             #check the normality of the distribution using Shapiro-Wilk test
-            # refNorm=stats.shapiro(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref])[1]>0.05
+            # refNorm=stats.shapiro(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==ref])[1]>0.05
             for com in leyLists:
-                pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref],tmpPlotData['pred'].loc[tmpPlotData['sample']==com])[1]
-                # comNorm=stats.shapiro(tmpPlotData['pred'].loc[tmpPlotData['sample']==com])[1]>0.05
+                pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==ref],tmpPlotData['pred'].loc[tmpPlotData['sampleID']==com])[1]
+                # comNorm=stats.shapiro(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==com])[1]>0.05
                 # if refNorm==True and comNorm==True:
-                #     # pValMat.loc[ref,com]=stats.ttest_ind(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref],tmpPlotData['pred'].loc[tmpPlotData['sample']==com])[1]
+                #     # pValMat.loc[ref,com]=stats.ttest_ind(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==ref],tmpPlotData['pred'].loc[tmpPlotData['sampleID']==com])[1]
                 # else:
-                #     pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['sample']==ref],tmpPlotData['pred'].loc[tmpPlotData['sample']==com])[1]
+                #     pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['sampleID']==ref],tmpPlotData['pred'].loc[tmpPlotData['sampleID']==com])[1]
 
         #save the p value matrix
-        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_pred_persample_pValMat.csv")
-        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_pred_persample_valVec.csv")
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_pValMat.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_valVec.csv")
              
         #test all
         leyLists=list(colorsTestAll.keys())
@@ -406,29 +417,31 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         fig = go.Figure()
         count=0
         for label in leyLists:
-            #violin with box plot and small sized points for outliers
-            fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['label']==label], 
-                                    name=label,
-                                    line_color='rgba(0,0,0,0)',
-                                    fillcolor=colorsTestAll[label],
-                                    opacity=0.7,
-                                    box_visible=False, 
-                                    meanline_visible=False,
-                                    side='negative',
-                                    marker_size=2
-                                    ))
-            #add box plot using same violiplot parameters
-            fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['label']==label], 
-                                    name=label,
-                                    line_color='rgba(0,0,0,0)',
-                                    fillcolor='rgba(0,0,0,0)',
-                                    opacity=1,
-                                    box_visible=True, 
-                                    box_fillcolor=colorsTestAll[label],
-                                    box_line_color='black',
-                                    meanline_visible=True,
-                                    marker_size=2
-                                    ))
+            if (tmpPlotData['label']==label).any():
+                #violin with box plot and small sized points for outliers
+                fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['label']==label], 
+                                        name=label,
+                                        line_color='rgba(0,0,0,0)',
+                                        fillcolor=colorsTestAll[label],
+                                        opacity=0.7,
+                                        box_visible=False, 
+                                        meanline_visible=False,
+                                        side='negative',
+                                        marker_size=2
+                                        ))
+                #add box plot using same violiplot parameters
+                fig.add_trace(go.Violin(y=tmpPlotData['pred'].loc[tmpPlotData['label']==label], 
+                                        name=label,
+                                        line_color='rgba(0,0,0,0)',
+                                        fillcolor='rgba(0,0,0,0)',
+                                        opacity=1,
+                                        box_visible=True, 
+                                        box_fillcolor=colorsTestAll[label],
+                                        box_line_color='black',
+                                        meanline_visible=True,
+                                        marker_size=2
+                                        ))
+                count+=1
         fig.update_layout(paper_bgcolor='rgba(0,0,0,0)')
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)')
         layout = dict(xaxis = dict(title = '', 
@@ -454,25 +467,27 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
         leyLists=list(colorsTest.keys())
         count=0
         for label in leyLists:
-            tmpMean=sampleDf['mean'].loc[sampleDf['sample']==label].to_list()
-            fig.add_trace(go.Box(y=tmpMean, 
-                            x=[sampleDf['label'].loc[sampleDf['sample']==label].values[0]],
-                           boxpoints='all',
-                            pointpos=0.5,
-                            name=label,
-                            marker = dict(color = colorsTest[label],
-                                        line = dict(color = 'rgba(0,0,0,1)',width=2),
-                                        size=10,),
-                            line = dict(color = 'rgba(0,0,0,0)'),
-                            fillcolor = 'rgba(0,0,0,0)' 
-                            ))
-            count+=1
+            if (sampleDf['sampleID']==label).any():
+                tmpMean=sampleDf['mean'].loc[sampleDf['sampleID']==label].to_list()
+                fig.add_trace(go.Box(y=tmpMean, 
+                                x=[sampleDf['label'].loc[sampleDf['sampleID']==label].values[0]],
+                            boxpoints='all',
+                                pointpos=0.5,
+                                name=label,
+                                marker = dict(color = colorsTest[label],
+                                            line = dict(color = 'rgba(0,0,0,1)',width=2),
+                                            size=10,),
+                                line = dict(color = 'rgba(0,0,0,0)'),
+                                fillcolor = 'rgba(0,0,0,0)' 
+                                ))
+                count+=1
         # fig.show()
-        saveFileName=f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_persample_mean_test_scatter_dist.html"
+        saveFileName=f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_persample_mean_test_scatter_dist.html"
         fig.write_html(saveFileName)
         
         
         leyLists=list(colorsTestAll.keys())
+        leyLists=[label for label in leyLists if (tmpPlotData['label']==label).any()]
         #obtain the p value for each sample
         pValMat=np.zeros((len(leyLists),len(leyLists)))
         pValMat=pd.DataFrame(pValMat,index=leyLists,columns=leyLists)
@@ -490,8 +505,8 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
                 # else:
                 #     pValMat.loc[ref,com]=stats.mannwhitneyu(tmpPlotData['pred'].loc[tmpPlotData['label']==ref],tmpPlotData['pred'].loc[tmpPlotData['label']==com])[1]
         #save the p value matrix
-        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_pValMat_mean.csv")
-        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_valVec_mean.csv")
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_means_pValMat_mean.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_means_valVec_mean.csv")
         
         #obtain the p value for each sample about the variance
         pValMat=np.zeros((len(leyLists),len(leyLists)))
@@ -510,8 +525,8 @@ def fig_o4_ImAge_validation_VIOLIN(projects: List[str] = ['longiBLOOD'],
                 # else:
                 #     pValMat.loc[ref,com]=stats.levene(tmpPlotData['pred'].loc[tmpPlotData['label']==ref],tmpPlotData['pred'].loc[tmpPlotData['label']==com])[1]
         #save the p value matrix
-        pValMat.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_pValMat_var.csv")
-        valVec.to_csv(f"{savePath}/{saveNameAdd}{'_'.join(sorted(statParas))}_{'_'.join(contents)}_binS{str(binS)}_meanS{str(meanSize)}_means_valVec_var.csv")        
+        pValMat.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_means_pValMat_var.csv")
+        valVec.to_csv(f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_means_valVec_var.csv")        
         
 #f-test function
 def f_test(x: np.ndarray, y: np.ndarray) -> float:

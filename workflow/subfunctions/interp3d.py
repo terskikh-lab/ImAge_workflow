@@ -17,6 +17,15 @@ def lin3dinterp(orgImg, xSample, ySample, zSample):
                 y2=int(np.ceil(ySample[j]))
                 z1=int(np.floor(zSample[k]))
                 z2=int(np.ceil(zSample[k]))
+                
+                # Boundary checks to prevent out of bounds access
+                if x1 < 0: x1 = 0
+                if x2 >= orgImg.shape[0]: x2 = orgImg.shape[0] - 1
+                if y1 < 0: y1 = 0
+                if y2 >= orgImg.shape[1]: y2 = orgImg.shape[1] - 1
+                if z1 < 0: z1 = 0
+                if z2 >= orgImg.shape[2]: z2 = orgImg.shape[2] - 1
+
                 #if x1==x2 or y1==y2 or z1==z2 then use 1 as the weight
                 if x1==x2:
                     xWeight=0.5

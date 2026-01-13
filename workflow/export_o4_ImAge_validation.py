@@ -39,6 +39,7 @@ from subfunctions.ezload import ezload
 #=====================================
 
 def export_o4_ImAge_validation(projects: List[str] = ['longiBLOOD'],
+                            resultsSavePath: str = '../Data/Results',
                             contents: List[str] = [
                                 'DAPI',
                                 'H3K4me1',
@@ -58,6 +59,7 @@ def export_o4_ImAge_validation(projects: List[str] = ['longiBLOOD'],
 
     Args:
         projects (List[str], optional): List of project names. Defaults to ['longiBLOOD'].
+        resultsSavePath (str, optional): Path to the results directory. Defaults to '../Data/Results'.
         binS (int, optional): Bin size. Defaults to 3.
         statParas (List[str], optional): List of statistical parameters. Defaults to ['TAS'].
         contents (List[str], optional): List of content names. Defaults to ['DAPI', 'H3K4me1', 'H3K27ac'].
@@ -69,8 +71,8 @@ def export_o4_ImAge_validation(projects: List[str] = ['longiBLOOD'],
         illumiCorrection (bool, optional): Whether illumination correction was used. Defaults to True.
     """
     #Initialization=======================
-    loadPath=f'../Data/Results/{"_".join(projects)}/o4_ImAge_validation'
-    savePath=f'../Data/Results/{"_".join(projects)}/export_o4_ImAge_validation'
+    loadPath=f'{resultsSavePath}/{"_".join(projects)}/o4_ImAge_validation'
+    savePath=f'{resultsSavePath}/{"_".join(projects)}/export_o4_ImAge_validation'
     
     os.makedirs(savePath, exist_ok=True)
     saveNameAdd=''
@@ -124,12 +126,12 @@ def export_o4_ImAge_validation(projects: List[str] = ['longiBLOOD'],
     train_data = plotData[plotData['group'] == 'Training']
     test_data = plotData[plotData['group'] == 'Test']
     # Save training data to CSV
-    train_saveName = f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_train.csv"
+    train_saveName = f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_train.csv"
     train_data.to_csv(train_saveName, index=False)
     print(f"Training data saved to {train_saveName}")
 
     # Save test data to CSV
-    test_saveName = f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{str(meanSize)}_{'_'.join(groups)}_pred_test.csv"
+    test_saveName = f"{savePath}/{saveNameAdd}_{statPara}_{'_'.join(contents)}_meanS{meanSize}_nBoot{nBoot}_{'_'.join(groups)}_{'_'.join(labels)}_pred_test.csv"
     test_data.to_csv(test_saveName, index=False)
     print(f"Test data saved to {test_saveName}")
 

@@ -21,6 +21,7 @@ Author:
 
 #import modules=======================
 import os
+import sys
 import random
 import time
 import tifffile as tiff
@@ -32,8 +33,6 @@ from basicpy import BaSiC
 from skimage import filters
 import platform    
 import concurrent.futures
-import threading
-import multiprocessing
 import re
 from typing import List, Dict, Optional, Any
 
@@ -135,7 +134,8 @@ def o2_segmentation(project: str = 'longiBLOOD',
         f"field{combo['field']}_col{combo['col']}_row{combo['raw']}"
         for _, combo in combos.iterrows()
     ]
-    display = ProgressDisplay(jobs, nWorkers)
+
+    display = ProgressDisplay(jobs, nWorkers, log_dir=savePath, cleanup_globs=[".*.pickle"])
 
     args_list = []
     for i, (_, combo) in enumerate(combos.iterrows()):
@@ -151,10 +151,11 @@ def o2_segmentation(project: str = 'longiBLOOD',
         ))
 
     display.start()
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
         futures = [executor.submit(_process_combo, args) for args in args_list]
-        for future in concurrent.futures.as_completed(futures):
-            display.update(future.result())
+        display.wait_for_futures(futures)
+            
     display.finish()
 
 
@@ -247,10 +248,10 @@ def _process_combo(args: tuple) -> Dict[str, Any]:
     
     normImg = imreqant(zStackImgC, np.percentile(zStackImgC, 1), np.percentile(zStackImgC, 99), 0, 1)
     normImgInterp = lin3dinterp(
-        filters.unsharp_mask(normImg, radius=3, amount=3),
+        filters.gaussian(normImg, sigma=1),
         downSampleZ,
-        downSampleX,
         downSampleY,
+        downSampleX,
     )
     
     # Segment the images using Stardist
@@ -260,18 +261,20 @@ def _process_combo(args: tuple) -> Dict[str, Any]:
     cellImgList = {}
     cellLocalCoordList = {}
     cellGlobalCoordList = {}
+    
+    upSampleZ=np.arange(0, normImg.shape[0])/interpFactorZXY[0]
+    upSampleX=np.arange(0, normImg.shape[2])/interpFactorZXY[2]
+    upSampleY=np.arange(0, normImg.shape[1])/interpFactorZXY[1]
     for cellIdx in range(1, len(cellsWBkg)):
         cellMask = masks==cellsWBkg[cellIdx]
         cellMaskInterp = shapelin3dinterp(cellMask.astype(float),
-                                        np.arange(0,normImgInterp.shape[0]),
-                                        np.arange(0,normImgInterp.shape[1]),
-                                        np.arange(0,normImgInterp.shape[2]),
-                                        zStackImgC.shape[0],
-                                        zStackImgC.shape[1],
-                                        zStackImgC.shape[2])
+                                          upSampleZ,
+                                          upSampleY,
+                                          upSampleX)
         cellMaskInterp = cellMaskInterp > 0.5
-        cellCropped, localCoord, globalCoord = crop3d(zStackImgC, cellMaskInterp, margin=[0,10,10])
-        cellImgList[cellsWBkg[cellIdx]] = {segCh:cellCropped}
+        cellCropped, maskCropped, localCoord, globalCoord = crop3d(img=zStackImgC, ROI=cellMaskInterp, margin=[0, 1, 1])
+        cellImgList[cellsWBkg[cellIdx]] = {segCh:cellCropped,
+                                           'mask':maskCropped.astype(int)}
         cellLocalCoordList[cellsWBkg[cellIdx]] = localCoord
         cellGlobalCoordList[cellsWBkg[cellIdx]] = globalCoord
 
@@ -301,8 +304,17 @@ def _process_combo(args: tuple) -> Dict[str, Any]:
             else:
                 zStackImgC = zStackImg
             for cellIdx in range(1, len(cellsWBkg)):
-                cellCropped, localCoord, globalCoord = crop3d(zStackImgC, cellMaskInterp, margin=[0,10,10])
-                cellImgList[cellsWBkg[cellIdx]][chList[chN]] = cellCropped
+                cell_id = cellsWBkg[cellIdx]
+                g = cellGlobalCoordList[cell_id]
+                l = cellLocalCoordList[cell_id]
+                
+                # Create a blank image of the same shape as the segCh crop
+                target_shape = cellImgList[cell_id][segCh].shape
+                cellCropped = np.zeros(target_shape, dtype=zStackImgC.dtype)
+                
+                # Slice the original image and place it into the padded crop
+                cellCropped[l[0]:l[1], l[2]:l[3], l[4]:l[5]] = zStackImgC[g[0]:g[1], g[2]:g[3], g[4]:g[5]]
+                cellImgList[cell_id][chList[chN]] = cellCropped
 
     ezsave({'cellImgList':cellImgList,
             'cellLocalCoordList':cellLocalCoordList,

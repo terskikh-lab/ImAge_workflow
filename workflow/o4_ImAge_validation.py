@@ -88,11 +88,11 @@ def o4_ImAge_validation(projects: List[str] = ['project'],
         nWorkers (int, optional): Number of parallel workers. Defaults to 4.
     """
     #Initialization=======================
-    parameter=paramerge(paramPath=f'{resultsSavePath}/Parameters', projects=[project.split('iC_')[-1] for project in projects])
+    parameter=paramerge(paramPath=f'{resultsSavePath}/platemap', projects=[project.split('iC_')[-1] for project in projects])
     loadPaths0=loadPathGenerator(loadPath=resultsSavePath, 
                                 projects=projects, 
                                 loadFolder='o3_extract_features')
-    savePath=f'../Data/Results/{"_".join(projects)}/o4_ImAge_validation'
+    savePath=f'{resultsSavePath}/{"_".join(projects)}/o4_ImAge_validation'
     os.makedirs(savePath, exist_ok=True)
     trainRatio=0.75
         
@@ -136,7 +136,7 @@ def o4_ImAge_validation(projects: List[str] = ['project'],
 
     # ==========================================================================================
     #check if the results already exist for each sample
-    allLabels=np.array(['_'.join(parameter.iloc[i][groups].tolist()) for i in range(len(parameter)) if not parameter.iloc[i]['Sample']=='0'])
+    allLabels=np.array(['_'.join(parameter.iloc[i][groups].tolist()) for i in range(len(parameter)) if not parameter.iloc[i]['sampleID']=='0'])
     allLabels=np.unique(allLabels)
     
     #initialize the array    
@@ -153,8 +153,8 @@ def o4_ImAge_validation(projects: List[str] = ['project'],
         #get teh list of the tmpLoadData folders that have all statParas
         compWellList=[]
         for statPara in statParas:
-            tmpWellList=dir_rmv_file(loadPath,f'{savePath}/{saveNameAdd}_{statPara}_{"_".join(contents)}_*.pickle')
-            compWellList=compWellList+['_'.join(i.split('_')[1:]) for i in tmpWellList]
+            tmpWellList=dir_rmv_file(loadPath,f'{saveNameAdd}_{statPara}_{"_".join(contents)}_*.pickle')
+            compWellList=compWellList+[i.split(f'{saveNameAdd}_{statPara}_')[1] for i in tmpWellList]
         # count the number of the tmpLoadData folders that have the same names
         loadDataList=[i for i in compWellList if compWellList.count(i)==len(statParas)]
         loadDataList=list(set(tuple(loadDataList)))
@@ -163,20 +163,18 @@ def o4_ImAge_validation(projects: List[str] = ['project'],
             return()
         
         for tmpLoadData in random.sample(loadDataList, len(loadDataList)):
-            args_list.append((i, loadPath, statParas, tmpLoadData, parameter, groups))
+            args_list.append((i, loadPath, statParas, tmpLoadData, parameter, groups, saveNameAdd))
             i += 1
-
-    display = ProgressDisplay([f"well {a[3]}" for a in args_list], nWorkers)
+    display = ProgressDisplay([f"well {a[3]}" for a in args_list], nWorkers, log_dir=savePath, cleanup_globs=[".*.pickle"])
     display.start()
     with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
         futures = [executor.submit(_process_well, args) for args in args_list]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
+        results = display.wait_for_futures(futures)
+        for result in results:
             if result:
                 featList.append(result['wellFeatStack'])
                 labelList.append(result['label'])
                 allParams.append(result['allParams'])
-            display.update(result)
     display.finish()
 
 
@@ -201,12 +199,11 @@ def o4_ImAge_validation(projects: List[str] = ['project'],
             i, seed, saveFileName1, idxFileName1, numericIdxTrainVal, trainRatio, numericIdxTestRest, allParams, sampleGroups, numericIdx, nBoot, meanSize, featStack, labelStack, oldLabel
         ))
 
-    display = ProgressDisplay([f"seed {s}" for s in seeds], nWorkers)
+    display = ProgressDisplay([f"seed {s}" for s in seeds], nWorkers, log_dir=savePath, cleanup_globs=[".*.pickle"])
     display.start()
     with concurrent.futures.ThreadPoolExecutor(max_workers=nWorkers) as executor:
         futures = [executor.submit(_process_seed, args) for args in args_list]
-        for future in concurrent.futures.as_completed(futures):
-            display.update(future.result())
+        display.wait_for_futures(futures)
     display.finish()
 
 
@@ -226,10 +223,10 @@ def _process_well(args: tuple) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: A dictionary containing the aggregated features, labels, and metadata for the well.
     """
-    i, loadPath, statParas, tmpLoadData, parameter, groups = args
+    i, loadPath, statParas, tmpLoadData, parameter, groups, saveNameAdd = args
     wellFeatStack=pd.DataFrame()
     for statPara in statParas:
-        statPath=f'{loadPath}/{statPara}_{tmpLoadData}'
+        statPath=f'{loadPath}/{saveNameAdd}_{statPara}_{tmpLoadData}'
         tmpFeat=ezload(statPath)['cellFeats']
         print(f'{statPath} loaded')
         wellFeatStack=pd.concat([wellFeatStack,tmpFeat],axis=1,sort=False)
